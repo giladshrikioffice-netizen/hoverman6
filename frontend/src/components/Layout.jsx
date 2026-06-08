@@ -1,49 +1,68 @@
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';
 
-const NAV = [
-  { key: 'dashboard', label: '🏠 דשבורד' },
-  { key: 'contractors', label: '👷 קבלנים' },
-  { key: 'budget', label: '💰 תקציב' },
-  { key: 'payments', label: '💳 גבייה' },
-  { key: 'decisions', label: '📋 החלטות' },
-  { key: 'updates', label: '📅 עדכונים' },
-  { key: 'complaints', label: '📩 פניות' },
+const NAV_ALL = [
+  { key: 'dashboard', label: 'דשבורד', icon: '📊' },
+  { key: 'contractors', label: 'קבלנים', icon: '👷' },
+  { key: 'budget', label: 'תקציב', icon: '💰' },
+  { key: 'payments', label: 'גבייה', icon: '💳' },
+  { key: 'decisions', label: 'החלטות', icon: '📋' },
+  { key: 'updates', label: 'עדכונים', icon: '📅' },
+  { key: 'maintenance', label: 'תחזוקה', icon: '🔧' },
+  { key: 'professionals', label: 'אנשי מקצוע', icon: '⭐' },
+  { key: 'complaints', label: 'פניות', icon: '📩' },
+  { key: 'tutorials', label: 'מדריכים', icon: '🎓' },
 ];
 
+const NAV_SUPERADMIN = [
+  { key: 'admin', label: 'ניהול מערכת', icon: '🏢' },
+  ...NAV_ALL,
+];
+
+const ROLE_LABEL = { superadmin: 'מנהל מערכת', admin: 'מנהל', committee: 'ועד בית', resident: 'דייר' };
+
 export default function Layout({ page, setPage, children }) {
-  const { user, logout } = useAuth();
+  const { user, building, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const roleLabel = { admin: 'מנהל פרויקט', committee: 'ועד בית', resident: 'דייר' }[user?.role] || '';
+  const nav = user?.role === 'superadmin' ? NAV_SUPERADMIN : NAV_ALL;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-white">
       {/* Top bar */}
-      <header className="bg-blue-800 text-white px-4 py-3 flex items-center justify-between shadow">
+      <header className="bg-slate-900 border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
           <button className="md:hidden text-xl" onClick={() => setOpen(!open)}>☰</button>
-          <span className="font-bold text-lg">🏗️ הוברמן 6</span>
-          <span className="hidden sm:inline text-blue-200 text-sm">פתח תקווה</span>
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-600 text-white font-black text-sm px-2 py-1 rounded">GS</div>
+            <div>
+              <span className="font-bold text-white text-sm">GS.pro</span>
+              {building && <span className="text-slate-400 text-xs mr-2">| {building.name || 'בניין'}</span>}
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="hidden sm:inline">{user?.full_name}</span>
-          <span className="bg-blue-600 px-2 py-0.5 rounded text-xs">{roleLabel}</span>
-          <button onClick={logout} className="bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded">יציאה</button>
+          <span className="hidden sm:inline text-slate-300">{user?.full_name}</span>
+          <span className="bg-blue-600/30 text-blue-300 border border-blue-600/50 px-2 py-0.5 rounded text-xs">{ROLE_LABEL[user?.role]}</span>
+          <button onClick={logout} className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-slate-200 text-xs transition-colors">יציאה</button>
         </div>
       </header>
 
       <div className="flex flex-1">
         {/* Sidebar */}
-        <nav className={`${open ? 'block' : 'hidden'} md:block w-48 bg-white shadow-md flex-shrink-0`}>
-          <ul className="py-2">
-            {NAV.map(n => (
+        <nav className={`${open ? 'block' : 'hidden'} md:block w-52 bg-slate-900 border-l border-slate-700 flex-shrink-0`}>
+          <ul className="py-3">
+            {nav.map(n => (
               <li key={n.key}>
                 <button
                   onClick={() => { setPage(n.key); setOpen(false); }}
-                  className={`w-full text-right px-4 py-3 text-sm hover:bg-blue-50 transition-colors ${page === n.key ? 'bg-blue-100 text-blue-800 font-semibold border-r-4 border-blue-600' : 'text-gray-700'}`}
+                  className={`w-full text-right px-4 py-2.5 text-sm transition-colors flex items-center gap-2 justify-end
+                    ${page === n.key
+                      ? 'bg-blue-600/20 text-blue-400 border-r-2 border-blue-500'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                 >
-                  {n.label}
+                  <span>{n.label}</span>
+                  <span className="text-base">{n.icon}</span>
                 </button>
               </li>
             ))}
@@ -51,7 +70,7 @@ export default function Layout({ page, setPage, children }) {
         </nav>
 
         {/* Main */}
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-auto bg-slate-950">
           {children}
         </main>
       </div>
