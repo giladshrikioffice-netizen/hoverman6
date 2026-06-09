@@ -25,7 +25,7 @@ export default function Updates() {
   return (
     <div className="max-w-3xl">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-white">📅 עדכונים שבועיים</h2>
+        <h2 className="text-xl font-bold text-white">📋 יומן פיקוח</h2>
         {canEdit && <button onClick={()=>{setForm({...EMPTY,visit_date:new Date().toISOString().slice(0,10)});setEditing('new');}} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm">+ עדכון חדש</button>}
       </div>
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
