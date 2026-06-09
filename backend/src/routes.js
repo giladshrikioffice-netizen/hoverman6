@@ -321,6 +321,26 @@ router.put('/permissions/:unit_id/:module', authenticate, requireAdminOrCommitte
   res.json({ ok: true, unit_id: uid, module: mod, enabled: enabled ? 1 : 0 });
 });
 
+// ── Feedback ──────────────────────────────────────────────
+router.post('/feedback', (req, res) => {
+  const { category, message, contact } = req.body;
+  if (!message) return res.status(400).json({ error: 'חסרה הודעה' });
+  // שמור ב-DB (טבלת feedback) אם קיימת, אחרת log
+  try {
+    q('INSERT OR IGNORE INTO feedback (category,message,contact,created_at) VALUES (?,?,?,datetime("now"))')
+      .run(category || 'other', message, contact || '');
+  } catch { /* טבלה לא קיימת עדיין */ }
+  console.log(`💬 Feedback [${category}]: ${message.substring(0, 80)}`);
+  res.json({ ok: true });
+});
+
+router.get('/feedback', (req, res) => {
+  if (req.user?.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  try {
+    res.json(q('SELECT * FROM feedback ORDER BY created_at DESC').all());
+  } catch { res.json([]); }
+});
+
 // ── Tutorials (public) ─────────────────────────────────────
 router.get('/tutorials', (req, res) => {
   res.json(q('SELECT * FROM tutorials ORDER BY id DESC').all());

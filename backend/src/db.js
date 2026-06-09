@@ -140,6 +140,14 @@ function init() {
       description TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT DEFAULT 'other',
+      message TEXT NOT NULL,
+      contact TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   seed();

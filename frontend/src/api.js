@@ -101,6 +101,10 @@ export const api = {
     del: id => req('DELETE', `/tutorials/${id}`),
   },
 
+  feedback: {
+    create: d => req('POST', '/feedback', d),
+  },
+
   permissions: {
     get: (unit_id) => req('GET', `/permissions/${unit_id}`),
     all: () => req('GET', bq('/permissions')),

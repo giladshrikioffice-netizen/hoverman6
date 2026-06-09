@@ -16,6 +16,7 @@ const NAV_ALL = [
   { key: 'payments',      label: 'גבייה',           icon: '💳', module: 'payments' },
   { key: 'complaints',    label: 'פניות דיירים',    icon: '📩', module: 'complaints' },
   { key: 'tutorials',     label: 'מדריכים',         icon: '🎓', module: 'tutorials' },
+  { key: 'feedback',      label: 'פידבק ושיפורים',  icon: '💬' },
 ];
 
 const NAV_COMMITTEE_EXTRA = [
