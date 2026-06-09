@@ -26,8 +26,8 @@ router.post('/buildings', authenticate, (req, res) => {
 
 router.put('/buildings/:id', authenticate, (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const { name, address, num_units, num_floors, budget, target_date } = req.body;
-  q('UPDATE buildings SET name=?,address=?,num_units=?,num_floors=?,budget=?,target_date=? WHERE id=?').run(name, address, num_units, num_floors, budget, target_date, req.params.id);
+  const { name, address, num_units, num_floors, budget, target_date, type } = req.body;
+  q('UPDATE buildings SET name=?,address=?,num_units=?,num_floors=?,budget=?,target_date=?,type=? WHERE id=?').run(name, address, num_units, num_floors, budget, target_date, type||'supervision', req.params.id);
   res.json(q('SELECT * FROM buildings WHERE id=?').get(req.params.id));
 });
 
@@ -269,6 +269,56 @@ router.put('/professionals/:id', authenticate, requireAdminOrCommittee, (req, re
 router.delete('/professionals/:id', authenticate, requireAdmin, (req, res) => {
   q('DELETE FROM professionals WHERE id=?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// ── Unit Permissions ──────────────────────────────────────
+const DEFAULT_MODULES = ['payments','complaints','updates','decisions','maintenance','professionals','tutorials'];
+
+// Get permissions for a unit (committee sees all units, resident sees own)
+router.get('/permissions/:unit_id', authenticate, (req, res) => {
+  const uid = parseInt(req.params.unit_id);
+  // Residents can only query their own unit
+  if (req.user.role === 'resident' && req.user.unit_id !== uid)
+    return res.status(403).json({ error: 'גישה נדחתה' });
+  const perms = q('SELECT module, enabled FROM unit_permissions WHERE unit_id=?').all(uid);
+  // Fill in defaults for any missing modules
+  const result = {};
+  DEFAULT_MODULES.forEach(mod => { result[mod] = 1; }); // default: all enabled
+  perms.forEach(p => { result[p.module] = p.enabled; });
+  res.json(result);
+});
+
+// Get all permissions for building (committee use)
+router.get('/permissions', authenticate, requireAdminOrCommittee, (req, res) => {
+  const bid = getBid(req);
+  const units = q('SELECT u.id, u.unit_number, u.owner_name FROM units u WHERE u.building_id=? ORDER BY u.unit_number').all(bid);
+  const perms = q('SELECT unit_id, module, enabled FROM unit_permissions WHERE building_id=?').all(bid);
+  const permMap = {};
+  perms.forEach(p => {
+    if (!permMap[p.unit_id]) permMap[p.unit_id] = {};
+    permMap[p.unit_id][p.module] = p.enabled;
+  });
+  // Also join resident name if there's a resident user for this unit
+  const residents = q("SELECT unit_id, full_name FROM users WHERE building_id=? AND role='resident'").all(bid);
+  const residentMap = {};
+  residents.forEach(r => { residentMap[r.unit_id] = r.full_name; });
+  res.json(units.map(u => ({
+    unit_id: u.id,
+    unit_number: u.unit_number,
+    resident_name: residentMap[u.id] || u.owner_name || null,
+    perms: Object.fromEntries(DEFAULT_MODULES.map(mod => [mod, permMap[u.id]?.[mod] ?? 1]))
+  })));
+});
+
+// Update permission for a unit+module
+router.put('/permissions/:unit_id/:module', authenticate, requireAdminOrCommittee, (req, res) => {
+  const uid = parseInt(req.params.unit_id);
+  const mod = req.params.module;
+  const { enabled } = req.body;
+  const bid = getBid(req);
+  q('INSERT INTO unit_permissions (unit_id,building_id,module,enabled) VALUES (?,?,?,?) ON CONFLICT(unit_id,module) DO UPDATE SET enabled=excluded.enabled')
+    .run(uid, bid, mod, enabled ? 1 : 0);
+  res.json({ ok: true, unit_id: uid, module: mod, enabled: enabled ? 1 : 0 });
 });
 
 // ── Tutorials (public) ─────────────────────────────────────

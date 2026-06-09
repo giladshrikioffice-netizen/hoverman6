@@ -20,7 +20,17 @@ function init() {
       num_floors INTEGER DEFAULT 0,
       budget REAL DEFAULT 0,
       target_date TEXT,
+      type TEXT DEFAULT 'supervision',
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS unit_permissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      unit_id INTEGER NOT NULL REFERENCES units(id),
+      building_id INTEGER NOT NULL REFERENCES buildings(id),
+      module TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      UNIQUE(unit_id, module)
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -151,9 +161,9 @@ function seed() {
     'גלעד שריקי', 'gilad@gspro.co.il', bcrypt.hashSync('admin123', 10), 'superadmin', null, null
   );
 
-  // Building: הוברמן 6
-  const b1 = q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date) VALUES (?,?,?,?,?,?)').run(
-    'הוברמן 6', 'רחוב הוברמן 6, פתח תקווה', 28, 7, 6000000, '2026-10-01'
+  // Building: הוברמן 6 (supervision)
+  const b1 = q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(
+    'הוברמן 6', 'רחוב הוברמן 6, פתח תקווה', 28, 7, 6000000, '2026-10-01', 'supervision'
   );
   const bid = b1.lastInsertRowid;
 
@@ -230,6 +240,20 @@ function seed() {
 
   // Sample professional
   q('INSERT INTO professionals (building_id,name,trade,phone,rating,review) VALUES (?,?,?,?,?,?)').run(bid,'רפי חשמל','חשמלאי','052-1234567',5,'מקצועי ומהיר, ממליץ בחום');
+
+  // Default permissions for resident (unit 1)
+  const DEFAULT_MODULES = ['payments','complaints','updates','decisions','maintenance','professionals','tutorials'];
+  DEFAULT_MODULES.forEach(mod => {
+    q('INSERT OR IGNORE INTO unit_permissions (unit_id,building_id,module,enabled) VALUES (?,?,?,?)').run(unit1.id, bid, mod, 1);
+  });
+
+  // Building 2: maintenance-only demo
+  const b2 = q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(
+    'שיכון ותיקים 12', 'רחוב הרצל 12, רמת גן', 20, 5, 0, null, 'maintenance'
+  );
+  const bid2 = b2.lastInsertRowid;
+  for (let i = 1; i <= 20; i++) q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid2,i,Math.ceil(i/4));
+  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('ועד רמת גן','vaad@rg12.co.il',bcrypt.hashSync('123456',10),'committee',bid2);
 
   console.log('✅ GS.pro seed data inserted');
 }

@@ -1,17 +1,25 @@
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';
 
+// Nav ordered by strategic priority: supervision → maintenance → collection → community
 const NAV_ALL = [
-  { key: 'dashboard', label: 'דשבורד', icon: '📊' },
-  { key: 'contractors', label: 'קבלנים', icon: '👷' },
-  { key: 'budget', label: 'תקציב', icon: '💰' },
-  { key: 'payments', label: 'גבייה', icon: '💳' },
-  { key: 'decisions', label: 'החלטות', icon: '📋' },
-  { key: 'updates', label: 'עדכונים', icon: '📅' },
-  { key: 'maintenance', label: 'תחזוקה', icon: '🔧' },
-  { key: 'professionals', label: 'אנשי מקצוע', icon: '⭐' },
-  { key: 'complaints', label: 'פניות', icon: '📩' },
-  { key: 'tutorials', label: 'מדריכים', icon: '🎓' },
+  { key: 'dashboard',     label: 'סקירת הבניין',  icon: '🏗️' },
+  // Supervision (shown only for supervision buildings)
+  { key: 'updates',       label: 'יומן פיקוח',    icon: '📋', supervisionOnly: true },
+  { key: 'contractors',   label: 'קבלנים',         icon: '👷', supervisionOnly: true },
+  { key: 'budget',        label: 'תקציב פרויקט',   icon: '💰', supervisionOnly: true },
+  { key: 'decisions',     label: 'החלטות',          icon: '✅', module: 'decisions' },
+  // Maintenance (all buildings)
+  { key: 'maintenance',   label: 'תחזוקה שוטפת',   icon: '🔧', module: 'maintenance' },
+  { key: 'professionals', label: 'ספק שירות',       icon: '⭐', module: 'professionals' },
+  // Residents / collection
+  { key: 'payments',      label: 'גבייה',           icon: '💳', module: 'payments' },
+  { key: 'complaints',    label: 'פניות דיירים',    icon: '📩', module: 'complaints' },
+  { key: 'tutorials',     label: 'מדריכים',         icon: '🎓', module: 'tutorials' },
+];
+
+const NAV_COMMITTEE_EXTRA = [
+  { key: 'permissions', label: 'הרשאות דיירים', icon: '🔐' },
 ];
 
 const NAV_SUPERADMIN = [
@@ -22,10 +30,24 @@ const NAV_SUPERADMIN = [
 const ROLE_LABEL = { superadmin: 'מנהל מערכת', admin: 'מנהל', committee: 'ועד בית', resident: 'דייר' };
 
 export default function Layout({ page, setPage, children }) {
-  const { user, building, logout } = useAuth();
+  const { user, building, logout, hasAccess, isSupervision } = useAuth();
   const [open, setOpen] = useState(false);
+  const buildingType = isSupervision ? 'פיקוח הנדסי' : 'תחזוקה שוטפת';
+  const buildingTypeColor = isSupervision
+    ? 'bg-blue-600/20 border-blue-600/40 text-blue-400'
+    : 'bg-emerald-600/20 border-emerald-600/40 text-emerald-400';
 
-  const nav = user?.role === 'superadmin' ? NAV_SUPERADMIN : NAV_ALL;
+  let baseNav = user?.role === 'superadmin' ? NAV_SUPERADMIN : NAV_ALL;
+
+  // Filter by supervision flag and permissions
+  const nav = [
+    ...baseNav.filter(n => {
+      if (n.supervisionOnly && !isSupervision) return false;
+      if (n.module && !hasAccess(n.module)) return false;
+      return true;
+    }),
+    ...(user?.role === 'committee' ? NAV_COMMITTEE_EXTRA : []),
+  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-white">
@@ -37,8 +59,13 @@ export default function Layout({ page, setPage, children }) {
             <div className="bg-blue-600 text-white font-black text-sm px-2 py-1 rounded">GS</div>
             <div>
               <span className="font-bold text-white text-sm">GS.pro</span>
-              {building && <span className="text-slate-400 text-xs mr-2">| {building.name || 'בניין'}</span>}
+              {building && <span className="text-slate-400 text-xs mr-2">| {building.name}</span>}
             </div>
+            {building && (
+              <span className={`hidden sm:inline border text-xs px-2 py-0.5 rounded-full ${buildingTypeColor}`}>
+                {buildingType}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">

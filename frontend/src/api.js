@@ -100,4 +100,10 @@ export const api = {
     create: d => req('POST', '/tutorials', d),
     del: id => req('DELETE', `/tutorials/${id}`),
   },
+
+  permissions: {
+    get: (unit_id) => req('GET', `/permissions/${unit_id}`),
+    all: () => req('GET', bq('/permissions')),
+    update: (unit_id, module, enabled) => req('PUT', `/permissions/${unit_id}/${module}`, { enabled }),
+  },
 };

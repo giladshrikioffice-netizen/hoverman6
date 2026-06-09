@@ -13,6 +13,8 @@ import Complaints from './pages/Complaints';
 import Maintenance from './pages/Maintenance';
 import Professionals from './pages/Professionals';
 import Tutorials from './pages/Tutorials';
+import Onboarding from './pages/Onboarding';
+import PermissionsManager from './pages/PermissionsManager';
 import { api } from './api';
 import './index.css';
 
@@ -21,18 +23,18 @@ const PAGES = {
   payments: Payments, decisions: Decisions, updates: Updates,
   complaints: Complaints, maintenance: Maintenance,
   professionals: Professionals, tutorials: Tutorials,
-  admin: AdminPanel,
+  admin: AdminPanel, permissions: PermissionsManager,
 };
 
 function AppInner() {
   const { user, building, setBuilding, selectBuilding, loading } = useAuth();
   const [page, setPage] = useState('dashboard');
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Load building info when user logs in
   useEffect(() => {
     if (user && !building) {
       if (user.role === 'superadmin') {
-        // Superadmin: load first building or go to admin
         api.buildings.list().then(bs => {
           if (bs.length > 0) { selectBuilding(bs[0]); }
           else setPage('admin');
@@ -46,6 +48,13 @@ function AppInner() {
     }
   }, [user]);
 
+  // Show onboarding on first login
+  useEffect(() => {
+    if (user && !localStorage.getItem('onboarding_done')) {
+      setShowOnboarding(true);
+    }
+  }, [user]);
+
   if (loading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
       <div className="text-slate-400 text-sm">טוען...</div>
@@ -53,6 +62,8 @@ function AppInner() {
   );
 
   if (!user) return <Login />;
+
+  if (showOnboarding) return <Onboarding onDone={() => setShowOnboarding(false)} />;
 
   const Page = PAGES[page] || Dashboard;
 

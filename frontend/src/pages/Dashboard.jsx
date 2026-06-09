@@ -7,11 +7,12 @@ const pct = (a, b) => b ? Math.min(Math.round((a / b) * 100), 100) : 0;
 
 function StatCard({ label, value, sub, color }) {
   const colors = {
-    blue: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-    green: 'border-green-500/30 bg-green-500/10 text-green-400',
+    blue:   'border-blue-500/30 bg-blue-500/10 text-blue-400',
+    green:  'border-green-500/30 bg-green-500/10 text-green-400',
     orange: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
-    red: 'border-red-500/30 bg-red-500/10 text-red-400',
+    red:    'border-red-500/30 bg-red-500/10 text-red-400',
     yellow: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400',
+    slate:  'border-slate-600/50 bg-slate-800/50 text-slate-300',
   };
   return (
     <div className={`rounded-xl border p-4 ${colors[color] || colors.blue}`}>
@@ -31,7 +32,7 @@ function ProgressBar({ value, color = 'bg-blue-500' }) {
 }
 
 export default function Dashboard() {
-  const { building } = useAuth();
+  const { building, isSupervision } = useAuth();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
 
@@ -46,37 +47,111 @@ export default function Dashboard() {
   const collectionPct = pct(data.payments.paid, data.payments.due);
 
   return (
-    <div className="max-w-4xl">
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-white">{data.building?.name || 'דשבורד'}</h2>
-        <p className="text-slate-400 text-sm">{data.building?.address}</p>
-      </div>
+    <div className="max-w-4xl" dir="rtl">
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatCard label="שולם מהתקציב" value={fmt(data.budget.paid)} sub={`${budgetPct}% מתוך ${fmt(data.budget.total)}`} color="blue" />
-        <StatCard label="יתרת תקציב" value={fmt(data.budget.total - data.budget.paid)} sub="נותר לשלם" color="orange" />
-        <StatCard label="גבייה שהתקבלה" value={fmt(data.payments.paid)} sub={`${collectionPct}% מהדיירים`} color="green" />
-        <StatCard label="התראות תחזוקה" value={data.maintenanceAlerts} sub="תוך 14 יום" color={data.maintenanceAlerts > 0 ? 'yellow' : 'green'} />
-      </div>
-
-      {/* Budget progress */}
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-4">
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-slate-400">התקדמות תקציב</span>
-          <span className="text-blue-400 font-semibold">{budgetPct}%</span>
+      {/* Building header */}
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">{data.building?.name || 'דשבורד'}</h2>
+          <p className="text-slate-400 text-sm mt-0.5">{data.building?.address}</p>
         </div>
-        <ProgressBar value={budgetPct} color="bg-blue-500" />
-        <div className="flex justify-between text-xs text-slate-500 mt-1.5">
-          <span>שולם: {fmt(data.budget.paid)}</span>
-          <span>יעד: {data.building?.target_date || '—'}</span>
-          <span>סה״כ: {fmt(data.budget.total)}</span>
+        {data.building?.target_date && isSupervision && (
+          <div className="text-left bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm">
+            <p className="text-slate-500 text-xs">יעד סיום</p>
+            <p className="text-white font-semibold">{data.building.target_date}</p>
+          </div>
+        )}
+      </div>
+
+      {/* === SUPERVISION SECTION === */}
+      {isSupervision && (
+        <>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">פיקוח הנדסי</span>
+            <div className="flex-1 h-px bg-blue-800/40" />
+          </div>
+
+          {/* Supervision stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <StatCard label="תקציב פרויקט" value={fmt(data.budget.total)} sub="סה״כ מאושר" color="blue" />
+            <StatCard label="שולם לקבלנים" value={fmt(data.budget.paid)} sub={`${budgetPct}% מהתקציב`} color="blue" />
+            <StatCard label="יתרה לביצוע" value={fmt(data.budget.total - data.budget.paid)} sub="נותר לשלם" color="orange" />
+            <StatCard label="קבלנים פעילים" value={data.activeContractors} sub="חוזים פעילים" color="slate" />
+          </div>
+
+          {/* Budget progress */}
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-4">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-slate-400">התקדמות תקציב פרויקט</span>
+              <span className="text-blue-400 font-semibold">{budgetPct}%</span>
+            </div>
+            <ProgressBar value={budgetPct} color="bg-blue-500" />
+            <div className="flex justify-between text-xs text-slate-500 mt-1.5">
+              <span>שולם: {fmt(data.budget.paid)}</span>
+              <span>סה״כ: {fmt(data.budget.total)}</span>
+            </div>
+          </div>
+
+          {/* Last supervision update */}
+          {data.lastUpdate && (
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-6">
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">
+                📋 עדכון פיקוח אחרון — {data.lastUpdate.visit_date}
+              </h3>
+              {data.lastUpdate.summary && (
+                <p className="text-slate-300 text-sm mb-3">{data.lastUpdate.summary}</p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {data.lastUpdate.blockers && (
+                  <div className="bg-orange-900/20 border border-orange-700/40 rounded-lg px-3 py-2 text-sm text-orange-400">
+                    ⚠️ <span className="font-semibold">חסמים:</span> {data.lastUpdate.blockers}
+                  </div>
+                )}
+                {data.lastUpdate.next_steps && (
+                  <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-3 py-2 text-sm text-blue-400">
+                    ➡️ <span className="font-semibold">הצעדים הבאים:</span> {data.lastUpdate.next_steps}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* === MAINTENANCE SECTION === */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">תחזוקה שוטפת</span>
+        <div className="flex-1 h-px bg-emerald-800/40" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+        <div className={`rounded-xl border p-4 ${
+          data.maintenanceAlerts > 0
+            ? 'border-yellow-500/40 bg-yellow-500/10'
+            : 'border-green-500/30 bg-green-500/10'
+        }`}>
+          <p className="text-slate-400 text-xs mb-1">התראות תחזוקה</p>
+          <p className={`text-2xl font-bold ${data.maintenanceAlerts > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+            {data.maintenanceAlerts}
+          </p>
+          <p className="text-slate-500 text-xs mt-1">
+            {data.maintenanceAlerts > 0 ? 'פריטים דורשים טיפול תוך 14 יום' : 'הכל תקין — אין התראות'}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-600/50 bg-slate-800/50 p-4">
+          <p className="text-slate-400 text-xs mb-1">פניות פתוחות</p>
+          <p className="text-2xl font-bold text-slate-300">{data.openComplaints}</p>
+          <p className="text-slate-500 text-xs mt-1">פניות דיירים הממתינות לטיפול</p>
         </div>
       </div>
 
-      {/* Collection progress */}
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-4">
+      {/* === COLLECTION SECTION (secondary) === */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">גבייה</span>
+        <div className="flex-1 h-px bg-slate-700" />
+      </div>
+
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
         <div className="flex justify-between text-sm mb-2">
           <span className="text-slate-400">גבייה מדיירים</span>
           <span className="text-green-400 font-semibold">{collectionPct}%</span>
@@ -84,28 +159,11 @@ export default function Dashboard() {
         <ProgressBar value={collectionPct} color="bg-green-500" />
         <div className="flex justify-between text-xs text-slate-500 mt-1.5">
           <span>שולם: {fmt(data.payments.paid)}</span>
-          <span>קבלנים פעילים: {data.activeContractors}</span>
-          <span>פניות פתוחות: {data.openComplaints}</span>
+          <span>לגבייה: {fmt(data.payments.due - data.payments.paid)}</span>
+          <span>סה״כ: {fmt(data.payments.due)}</span>
         </div>
       </div>
 
-      {/* Last update */}
-      {data.lastUpdate && (
-        <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-slate-300 mb-2">📅 עדכון אחרון — {data.lastUpdate.visit_date}</h3>
-          {data.lastUpdate.summary && <p className="text-slate-400 text-sm mb-2">{data.lastUpdate.summary}</p>}
-          {data.lastUpdate.blockers && (
-            <div className="bg-orange-900/20 border border-orange-700/40 rounded-lg px-3 py-1.5 text-sm text-orange-400 mb-2">
-              ⚠️ {data.lastUpdate.blockers}
-            </div>
-          )}
-          {data.lastUpdate.next_steps && (
-            <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-3 py-1.5 text-sm text-blue-400">
-              ➡️ {data.lastUpdate.next_steps}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
