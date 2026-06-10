@@ -112,6 +112,16 @@ export const api = {
     send: () => req('POST', '/alerts/send', {}),
   },
 
+  documents: {
+    list: () => req('GET', bq('/documents')),
+    create: d => req('POST', '/documents', { ...d, building_id: getBid() }),
+    update: (id, d) => req('PUT', `/documents/${id}`, d),
+    del: id => req('DELETE', `/documents/${id}`),
+    download: id => req('GET', `/documents/${id}/download`),
+    checklist: () => req('GET', bq('/documents/checklist')),
+    updateChecklist: (key, status, note) => req('PUT', `/documents/checklist/${key}?building_id=${getBid()}`, { status, note }),
+  },
+
   permissions: {
     get: (unit_id) => req('GET', `/permissions/${unit_id}`),
     all: () => req('GET', bq('/permissions')),

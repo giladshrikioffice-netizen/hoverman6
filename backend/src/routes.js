@@ -199,10 +199,10 @@ router.get('/complaints', authenticate, (req, res) => {
 });
 router.post('/complaints', authenticate, (req, res) => {
   const bid = getBid(req);
-  const { subject, body, unit_id } = req.body;
+  const { subject, body, unit_id, photo } = req.body;
   const uid = req.user.role === 'resident' ? req.user.unit_id : unit_id;
   if (!uid) return res.status(400).json({ error: 'חסר מספר דירה' });
-  const r = q('INSERT INTO complaints (unit_id,building_id,subject,body,status) VALUES (?,?,?,?,?)').run(uid, bid, subject, body||'', 'פתוח');
+  const r = q('INSERT INTO complaints (unit_id,building_id,subject,body,status,photo) VALUES (?,?,?,?,?,?)').run(uid, bid, subject, body||'', 'פתוח', photo||null);
   res.json(q(cSelect + ' WHERE c.id=?').get(r.lastInsertRowid));
 });
 router.put('/complaints/:id', authenticate, requireAdminOrCommittee, (req, res) => {
@@ -461,6 +461,86 @@ router.get('/feedback', (req, res) => {
   try {
     res.json(q('SELECT * FROM feedback ORDER BY created_at DESC').all());
   } catch { res.json([]); }
+});
+
+// ── Documents ─────────────────────────────────────────────
+const CHECKLIST_ITEMS = [
+  { key: 'building_permit',    label: 'היתר בנייה' },
+  { key: 'architect_plans',    label: 'תוכניות אדריכל מאושרות' },
+  { key: 'main_contract',      label: 'חוזה קבלן ראשי חתום' },
+  { key: 'insurance_contractor', label: 'ביטוח קבלן / אחריות צד ג\'' },
+  { key: 'insurance_building', label: 'ביטוח מבנה משותף' },
+  { key: 'va\'ad_protocol',    label: 'פרוטוקול אסיפת דיירים מאשר פרויקט' },
+  { key: 'payment_schedule',   label: 'לוח תשלומים מוסכם' },
+  { key: 'fire_safety',        label: 'אישור בטיחות אש' },
+  { key: 'structural_engineer', label: 'חוות דעת מהנדס קונסטרוקציה' },
+  { key: 'elevator_permit',    label: 'רישיון מעלית תקף' },
+  { key: 'warranty_docs',      label: 'אחריות יצרן לחומרים (תריסים, מעקות, אלומיניום)' },
+  { key: 'building_book',      label: 'ספר הבניין (תיק הבניין הדיגיטלי)' },
+  { key: 'tax_clearance',      label: 'אישור ניכוי מס במקור — קבלן ראשי' },
+  { key: 'subcontractors',     label: 'חוזי קבלני משנה חתומים' },
+  { key: 'completion_cert',    label: 'תעודת גמר / טופס 4 (בסיום)' },
+];
+
+router.get('/documents', authenticate, (req, res) => {
+  const bid = getBid(req);
+  if (!bid) return res.status(400).json({ error: 'חסר building_id' });
+  const isPrivileged = ['superadmin','committee'].includes(req.user.role);
+  const docs = isPrivileged
+    ? q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE building_id=? ORDER BY created_at DESC').all(bid)
+    : q("SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE building_id=? AND visibility='all' ORDER BY created_at DESC").all(bid);
+  res.json(docs);
+});
+
+router.get('/documents/:id/download', authenticate, (req, res) => {
+  const doc = q('SELECT * FROM documents WHERE id=?').get(req.params.id);
+  if (!doc) return res.status(404).json({ error: 'לא נמצא' });
+  const isPrivileged = ['superadmin','committee'].includes(req.user.role);
+  if (doc.visibility !== 'all' && !isPrivileged) return res.status(403).json({ error: 'אין גישה' });
+  if (!doc.file_data) return res.status(404).json({ error: 'אין קובץ' });
+  res.json({ file_data: doc.file_data, file_type: doc.file_type, file_name: doc.file_name });
+});
+
+router.post('/documents', authenticate, requireAdminOrCommittee, (req, res) => {
+  const bid = getBid(req);
+  const { name, description, category, file_data, file_type, file_name, file_size, visibility } = req.body;
+  if (!name) return res.status(400).json({ error: 'שם חובה' });
+  const r = q('INSERT INTO documents (building_id,name,description,category,file_data,file_type,file_name,file_size,visibility,uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(bid, name, description||'', category||'general', file_data||null, file_type||'', file_name||'', file_size||0, visibility||'committee', req.user.full_name);
+  res.json(q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE id=?').get(r.lastInsertRowid));
+});
+
+router.put('/documents/:id', authenticate, requireAdminOrCommittee, (req, res) => {
+  const { name, description, category, visibility } = req.body;
+  q('UPDATE documents SET name=?,description=?,category=?,visibility=? WHERE id=?').run(name, description, category, visibility, req.params.id);
+  res.json(q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE id=?').get(req.params.id));
+});
+
+router.delete('/documents/:id', authenticate, requireAdminOrCommittee, (req, res) => {
+  q('DELETE FROM documents WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Checklist
+router.get('/documents/checklist', authenticate, requireAdminOrCommittee, (req, res) => {
+  const bid = getBid(req);
+  const saved = q('SELECT item_key, status, note, updated_at FROM doc_checklist WHERE building_id=?').all(bid);
+  const savedMap = Object.fromEntries(saved.map(s => [s.item_key, s]));
+  res.json(CHECKLIST_ITEMS.map(item => ({
+    ...item,
+    status: savedMap[item.key]?.status || 'missing',
+    note: savedMap[item.key]?.note || '',
+    updated_at: savedMap[item.key]?.updated_at || null,
+  })));
+});
+
+router.put('/documents/checklist/:key', authenticate, requireAdminOrCommittee, (req, res) => {
+  const bid = getBid(req);
+  const { status, note } = req.body;
+  const now = new Date().toISOString().slice(0,10);
+  q('INSERT INTO doc_checklist (building_id,item_key,status,note,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(building_id,item_key) DO UPDATE SET status=excluded.status,note=excluded.note,updated_at=excluded.updated_at')
+    .run(bid, req.params.key, status, note||'', now);
+  res.json({ ok: true });
 });
 
 // ── Cron: send alert emails ───────────────────────────────

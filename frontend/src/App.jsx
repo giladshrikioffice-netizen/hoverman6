@@ -19,6 +19,7 @@ import Feedback from './pages/Feedback';
 import UsersManager from './pages/UsersManager';
 import Settings from './pages/Settings';
 import Privacy from './pages/Privacy';
+import Documents from './pages/Documents';
 import { api } from './api';
 import './index.css';
 
@@ -31,6 +32,7 @@ const PAGES = {
   users: UsersManager,
   settings: Settings,
   privacy: Privacy,
+  documents: Documents,
 };
 
 function AppInner() {

@@ -148,7 +148,37 @@ function init() {
       contact TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      building_id INTEGER REFERENCES buildings(id),
+      name TEXT NOT NULL,
+      description TEXT,
+      category TEXT DEFAULT 'general',
+      file_data TEXT,
+      file_type TEXT,
+      file_name TEXT,
+      file_size INTEGER DEFAULT 0,
+      visibility TEXT DEFAULT 'committee',
+      uploaded_by TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS doc_checklist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      building_id INTEGER REFERENCES buildings(id),
+      item_key TEXT NOT NULL,
+      status TEXT DEFAULT 'missing',
+      note TEXT,
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(building_id, item_key)
+    );
   `);
+
+  // Add photo column to complaints if not exists
+  try { db.exec(`ALTER TABLE complaints ADD COLUMN photo TEXT`); } catch {}
+  // Add visibility to documents if not exists (migration safety)
+  try { db.exec(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`); } catch {}
 
   seed();
 }
