@@ -16,6 +16,7 @@ import Tutorials from './pages/Tutorials';
 import Onboarding from './pages/Onboarding';
 import PermissionsManager from './pages/PermissionsManager';
 import Feedback from './pages/Feedback';
+import UsersManager from './pages/UsersManager';
 import { api } from './api';
 import './index.css';
 
@@ -25,6 +26,7 @@ const PAGES = {
   complaints: Complaints, maintenance: Maintenance,
   professionals: Professionals, tutorials: Tutorials,
   admin: AdminPanel, permissions: PermissionsManager, feedback: Feedback,
+  users: UsersManager,
 };
 
 function AppInner() {

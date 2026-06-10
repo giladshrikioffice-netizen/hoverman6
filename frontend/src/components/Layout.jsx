@@ -25,6 +25,7 @@ const NAV_COMMITTEE_EXTRA = [
 
 const NAV_SUPERADMIN = [
   { key: 'admin', label: 'ניהול מערכת', icon: '🏢' },
+  { key: 'users', label: 'ניהול משתמשים', icon: '👥' },
   ...NAV_ALL,
 ];
 

@@ -110,4 +110,11 @@ export const api = {
     all: () => req('GET', bq('/permissions')),
     update: (unit_id, module, enabled) => req('PUT', `/permissions/${unit_id}/${module}`, { enabled }),
   },
+
+  users: {
+    list: () => req('GET', '/users'),
+    create: d => req('POST', '/users', d),
+    resetPassword: (id, password) => req('PUT', `/users/${id}/password`, { password }),
+    del: id => req('DELETE', `/users/${id}`),
+  },
 };
