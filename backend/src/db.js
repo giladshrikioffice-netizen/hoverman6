@@ -192,6 +192,16 @@ function addDays(dateStr, days) {
 
 function seed() {
   const count = q('SELECT COUNT(*) as c FROM users').get();
+
+  // Always ensure superadmin credentials are up to date
+  const existingAdmin = q("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
+  if (existingAdmin) {
+    q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+      'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), existingAdmin.id
+    );
+    console.log('✅ Superadmin credentials updated');
+  }
+
   if (count.c > 0) return;
 
   // Super admin
