@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
-const EMPTY = { name: '', trade: '', phone: '', rating: 5, review: '', last_cost: '', last_service_date: '' };
+const EMPTY = { name: '', trade: '', phone: '', email: '', rating: 5, review: '', last_cost: '', last_service_date: '' };
 
 function Stars({ rating, onChange }) {
   return (
@@ -78,8 +78,24 @@ export default function Professionals() {
               )}
             </div>
             <Stars rating={r.rating} />
-            <div className="mt-2 space-y-1 text-xs text-slate-400">
-              {r.phone && <p>📞 {r.phone}</p>}
+            <div className="mt-3 space-y-1 text-xs text-slate-400">
+              {r.phone && (
+                <div className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2">
+                  <a href={`tel:${r.phone}`} className="text-blue-400 hover:text-blue-300 font-medium">📞 {r.phone}</a>
+                  <div className="flex gap-2">
+                    <a href={`tel:${r.phone}`} className="bg-blue-700 hover:bg-blue-600 text-white px-2 py-0.5 rounded text-xs transition-colors">התקשר</a>
+                    <a href={`https://wa.me/972${r.phone.replace(/[^0-9]/g,'').replace(/^0/,'')}`} target="_blank" rel="noreferrer"
+                      className="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-0.5 rounded text-xs transition-colors">WhatsApp</a>
+                  </div>
+                </div>
+              )}
+              {r.email && (
+                <div className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2">
+                  <span className="text-slate-400">✉️ {r.email}</span>
+                  <a href={`mailto:${r.email}?subject=פנייה מ-GS.pro&body=שלום ${r.name},%0A%0A`}
+                    className="bg-slate-600 hover:bg-slate-500 text-white px-2 py-0.5 rounded text-xs transition-colors">שלח מייל</a>
+                </div>
+              )}
               {r.last_cost && <p>💰 טיפול אחרון: ₪{Number(r.last_cost).toLocaleString()}</p>}
               {r.last_service_date && <p>📅 {r.last_service_date}</p>}
               {r.review && <p className="text-slate-300 mt-1 bg-slate-800 rounded px-2 py-1">"{r.review}"</p>}
@@ -93,7 +109,7 @@ export default function Professionals() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-4">{editing === 'new' ? 'איש מקצוע חדש' : 'עריכה'}</h3>
-            {[['name','שם'],['trade','תחום'],['phone','טלפון'],['last_cost','עלות טיפול אחרון (₪)'],['last_service_date','תאריך טיפול אחרון','date']].map(([k,l,t]) => (
+            {[['name','שם'],['trade','תחום'],['phone','📞 טלפון'],['email','✉️ אימייל','email'],['last_cost','עלות טיפול אחרון (₪)'],['last_service_date','תאריך טיפול אחרון','date']].map(([k,l,t]) => (
               <div key={k} className="mb-3">
                 <label className="block text-xs text-slate-400 mb-1">{l}</label>
                 <input type={t||'text'} value={form[k]||''} onChange={e => setForm(p=>({...p,[k]:e.target.value}))}

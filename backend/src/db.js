@@ -177,6 +177,8 @@ function init() {
 
   // Add photo column to complaints if not exists
   try { db.exec(`ALTER TABLE complaints ADD COLUMN photo TEXT`); } catch {}
+  // Add email column to professionals if not exists
+  try { db.exec(`ALTER TABLE professionals ADD COLUMN email TEXT`); } catch {}
   // Add visibility to documents if not exists (migration safety)
   try { db.exec(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`); } catch {}
 
@@ -193,14 +195,29 @@ function addDays(dateStr, days) {
 function seed() {
   const count = q('SELECT COUNT(*) as c FROM users').get();
 
-  // Always ensure superadmin credentials are up to date
+  // Always ensure real credentials on every startup (survives Render restarts)
   const existingAdmin = q("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
   if (existingAdmin) {
     q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
       'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), existingAdmin.id
     );
-    console.log('✅ Superadmin credentials updated');
   }
+  const existingShira = q("SELECT id FROM users WHERE email LIKE '%shira%' AND role='committee' LIMIT 1").get();
+  if (existingShira) {
+    q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+      'שירה אילן', 'shirailan10@gmail.com', bcrypt.hashSync('0522929529', 10), existingShira.id
+    );
+  }
+  const existingAharon = q("SELECT id FROM users WHERE role='committee' AND id!=? LIMIT 1").get(existingShira?.id || 0);
+  if (existingAharon) {
+    q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+      'אהרון שם טוב', 'ashemtov280860@gmail.com', bcrypt.hashSync('0584766555', 10), existingAharon.id
+    );
+  }
+  // Fix fake names in decisions table
+  q("UPDATE decisions SET approved_by='שירה אילן' WHERE approved_by='שירה כהן'").run();
+  q("UPDATE decisions SET approved_by='אהרון שם טוב' WHERE approved_by='אהרון לוי'").run();
+  console.log('✅ Credentials & names updated');
 
   if (count.c > 0) return;
 
@@ -258,8 +275,8 @@ function seed() {
   });
 
   // Decisions
-  q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-01-15','אישור קבלן ראשי – חמודי','שירה כהן','מאושר');
-  q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-02-10','אישור ספק תריסים','אהרון לוי','מאושר');
+  q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-01-15','אישור קבלן ראשי – חמודי','שירה אילן','מאושר');
+  q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-02-10','אישור ספק תריסים','אהרון שם טוב','מאושר');
 
   // Update
   q('INSERT INTO updates (building_id,visit_date,summary,blockers,next_steps,author) VALUES (?,?,?,?,?,?)').run(

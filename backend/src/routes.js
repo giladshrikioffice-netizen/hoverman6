@@ -257,13 +257,13 @@ router.get('/professionals', authenticate, (req, res) => {
 });
 router.post('/professionals', authenticate, requireAdminOrCommittee, (req, res) => {
   const bid = getBid(req);
-  const { name, trade, phone, rating, review, last_cost, last_service_date } = req.body;
-  const r = q('INSERT INTO professionals (building_id,name,trade,phone,rating,review,last_cost,last_service_date) VALUES (?,?,?,?,?,?,?,?)').run(bid, name, trade, phone, rating||0, review||'', last_cost||null, last_service_date||null);
+  const { name, trade, phone, email, rating, review, last_cost, last_service_date } = req.body;
+  const r = q('INSERT INTO professionals (building_id,name,trade,phone,email,rating,review,last_cost,last_service_date) VALUES (?,?,?,?,?,?,?,?,?)').run(bid, name, trade, phone, email||'', rating||0, review||'', last_cost||null, last_service_date||null);
   res.json(q('SELECT * FROM professionals WHERE id=?').get(r.lastInsertRowid));
 });
 router.put('/professionals/:id', authenticate, requireAdminOrCommittee, (req, res) => {
-  const { name, trade, phone, rating, review, last_cost, last_service_date } = req.body;
-  q('UPDATE professionals SET name=?,trade=?,phone=?,rating=?,review=?,last_cost=?,last_service_date=? WHERE id=?').run(name, trade, phone, rating, review, last_cost, last_service_date, req.params.id);
+  const { name, trade, phone, email, rating, review, last_cost, last_service_date } = req.body;
+  q('UPDATE professionals SET name=?,trade=?,phone=?,email=?,rating=?,review=?,last_cost=?,last_service_date=? WHERE id=?').run(name, trade, phone, email||'', rating, review, last_cost, last_service_date, req.params.id);
   res.json(q('SELECT * FROM professionals WHERE id=?').get(req.params.id));
 });
 router.delete('/professionals/:id', authenticate, requireAdmin, (req, res) => {
