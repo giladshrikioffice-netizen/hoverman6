@@ -52,6 +52,17 @@ export default function Complaints() {
           className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ פנייה חדשה</button>
       </div>
 
+      {/* Info banner for residents */}
+      {!canManage && (
+        <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl px-4 py-3 mb-4 flex items-start gap-3">
+          <span className="text-blue-400 text-lg mt-0.5">ℹ️</span>
+          <div>
+            <p className="text-blue-300 text-sm font-medium">הפנייה מועברת לוועד הבית</p>
+            <p className="text-blue-400/70 text-xs mt-0.5">הוועד יטפל בפנייה ויחזור אליך. פניות דחופות יועברו לגורם המטפל הרלוונטי.</p>
+          </div>
+        </div>
+      )}
+
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
 
       <div className="space-y-3">
