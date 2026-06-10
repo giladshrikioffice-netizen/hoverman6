@@ -182,7 +182,19 @@ function init() {
   // Add visibility to documents if not exists (migration safety)
   try { db.exec(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`); } catch {}
 
+  // Key/value meta table for one-time migration flags
+  db.exec(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`);
+
   seed();
+}
+
+// Run a migration only once, guarded by a flag in the meta table.
+function runOnce(key, fn) {
+  const done = q('SELECT value FROM meta WHERE key=?').get(key);
+  if (done) return;
+  fn();
+  q('INSERT OR REPLACE INTO meta (key,value) VALUES (?,?)').run(key, new Date().toISOString());
+  console.log(`✅ Migration applied: ${key}`);
 }
 
 function addDays(dateStr, days) {
@@ -195,29 +207,31 @@ function addDays(dateStr, days) {
 function seed() {
   const count = q('SELECT COUNT(*) as c FROM users').get();
 
-  // Always ensure real credentials on every startup (survives Render restarts)
-  const existingAdmin = q("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
-  if (existingAdmin) {
-    q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
-      'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), existingAdmin.id
-    );
-  }
-  const existingShira = q("SELECT id FROM users WHERE email LIKE '%shira%' AND role='committee' LIMIT 1").get();
-  if (existingShira) {
-    q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
-      'שירה אילן', 'shirailan10@gmail.com', bcrypt.hashSync('0522929529', 10), existingShira.id
-    );
-  }
-  const existingAharon = q("SELECT id FROM users WHERE role='committee' AND id!=? LIMIT 1").get(existingShira?.id || 0);
-  if (existingAharon) {
-    q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
-      'אהרון שם טוב', 'ashemtov280860@gmail.com', bcrypt.hashSync('0584766555', 10), existingAharon.id
-    );
-  }
-  // Fix fake names in decisions table
-  q("UPDATE decisions SET approved_by='שירה אילן' WHERE approved_by='שירה כהן'").run();
-  q("UPDATE decisions SET approved_by='אהרון שם טוב' WHERE approved_by='אהרון לוי'").run();
-  console.log('✅ Credentials & names updated');
+  // ONE-TIME fix: correct names + reset credentials for the 3 key users.
+  // Runs only once (guarded by meta flag) so user-changed passwords are NOT clobbered on every restart.
+  runOnce('fix_real_credentials_v1', () => {
+    const existingAdmin = q("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
+    if (existingAdmin) {
+      q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+        'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), existingAdmin.id
+      );
+    }
+    const existingShira = q("SELECT id FROM users WHERE email LIKE '%shira%' AND role='committee' LIMIT 1").get();
+    if (existingShira) {
+      q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+        'שירה אילן', 'shirailan10@gmail.com', bcrypt.hashSync('0522929529', 10), existingShira.id
+      );
+    }
+    const existingAharon = q("SELECT id FROM users WHERE role='committee' AND id!=? LIMIT 1").get(existingShira?.id || 0);
+    if (existingAharon) {
+      q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+        'אהרון שם טוב', 'ashemtov280860@gmail.com', bcrypt.hashSync('0584766555', 10), existingAharon.id
+      );
+    }
+    // Fix fake names in decisions table
+    q("UPDATE decisions SET approved_by='שירה אילן' WHERE approved_by='שירה כהן'").run();
+    q("UPDATE decisions SET approved_by='אהרון שם טוב' WHERE approved_by='אהרון לוי'").run();
+  });
 
   if (count.c > 0) return;
 

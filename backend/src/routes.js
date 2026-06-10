@@ -456,7 +456,7 @@ router.post('/feedback', (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/feedback', (req, res) => {
+router.get('/feedback', authenticate, (req, res) => {
   if (req.user?.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
   try {
     res.json(q('SELECT * FROM feedback ORDER BY created_at DESC').all());
