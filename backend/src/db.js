@@ -196,7 +196,7 @@ function seed() {
 
   // Super admin
   q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)').run(
-    'גלעד שריקי', 'gilad@gspro.co.il', bcrypt.hashSync('admin123', 10), 'superadmin', null, null
+    'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), 'superadmin', null, null
   );
 
   // Building: הוברמן 6 (supervision)
@@ -211,8 +211,8 @@ function seed() {
   }
 
   // Committee users
-  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('שירה כהן','shira@hoverman6.co.il',bcrypt.hashSync('123456',10),'committee',bid);
-  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('אהרון לוי','aharon@hoverman6.co.il',bcrypt.hashSync('123456',10),'committee',bid);
+  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('שירה אילן','shirailan10@gmail.com',bcrypt.hashSync('0522929529',10),'committee',bid);
+  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('אהרון שם טוב','ashemtov280860@gmail.com',bcrypt.hashSync('0584766555',10),'committee',bid);
 
   // Resident
   const unit1 = q('SELECT id FROM units WHERE building_id=? AND unit_number=1').get(bid);
