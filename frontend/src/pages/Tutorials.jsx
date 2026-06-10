@@ -2,6 +2,51 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
+const GUIDE = [
+  { icon: '🔑', title: 'כניסה למערכת', steps: [
+    'היכנסו לכתובת gspro-app.vercel.app',
+    'בכניסה הראשונה ייתכן שהשרת "מתעורר" עד 30 שניות — תופיע הודעה מתאימה.',
+    'הזינו אימייל וסיסמה ולחצו "כניסה למערכת".',
+    'ניתן לשנות סיסמה בכל עת תחת "הגדרות חשבון" ⚙️.',
+  ]},
+  { icon: '💳', title: 'ניהול גבייה ותשלומים', steps: [
+    'היכנסו ל"גבייה".',
+    'לחצו על ✏️ בשורת הדייר כדי לערוך.',
+    'ניתן לשנות גם את הסכום "לתשלום" וגם את הסכום "ששולם".',
+    'הוסיפו הערה במידת הצורך ולחצו "שמירה". הסטטוס מתעדכן אוטומטית.',
+  ]},
+  { icon: '📩', title: 'פניות דיירים', steps: [
+    'דייר פותח פנייה (נושא + תיאור, אפשר לצרף תמונה).',
+    'הפנייה עולה תחילה לוועד הבית — לא ישירות לגלעד.',
+    'הוועד משנה סטטוס: פתוח ← בטיפול ← טופל.',
+    'גלעד מקבל רק את מה שהוועד מעביר אליו.',
+  ]},
+  { icon: '⭐', title: 'אנשי מקצוע / ספקי שירות', steps: [
+    'לחצו "+ הוסף" ומלאו שם, תחום, טלפון, אימייל, דירוג וחוות דעת.',
+    'לחיצה על "התקשר" פותחת שיחה; "WhatsApp" פותח צ\'אט; "שלח מייל" פותח מייל.',
+    'ניתן לערוך (✏️) או למחוק (🗑️) כל ספק.',
+  ]},
+  { icon: '📁', title: 'תיק בניין (מסמכים)', steps: [
+    'בלשונית "מסמכים" — לחצו "העלה מסמך", בחרו קובץ (PDF/Word/Excel/תמונה עד 8MB).',
+    'בחרו נראות: 🔒 ועד בלבד או 🌐 גלוי גם לדיירים.',
+    'בלשונית "צ\'קליסט" — עקבו אחר 15 מסמכי החובה (✅ קיים / ⚠️ חלקי / ❌ חסר).',
+  ]},
+  { icon: '👥', title: 'ניהול משתמשים (גלעד בלבד)', steps: [
+    'לחצו "+ משתמש חדש" ומלאו שם, אימייל, סיסמה, תפקיד ובניין.',
+    'עריכה: ✏️ · איפוס סיסמה: 🔑 · שליחת הזמנה במייל: 📧 · מחיקה: 🗑️.',
+  ]},
+  { icon: '🔧', title: 'תחזוקה שוטפת', steps: [
+    'לחצו ✏️ על פריט, עדכנו תאריך בדיקה אחרונה וסטטוס.',
+    'המערכת מחשבת אוטומטית את מועד הבדיקה הבאה.',
+    'פריטים שמתקרבים למועד מסומנים בהתראה.',
+  ]},
+  { icon: '🏗️', title: 'פיקוח: יומן, קבלנים, תקציב', steps: [
+    'יומן פיקוח — "+ ביקור חדש": תאריך, סיכום, חסמים, צעדים הבאים.',
+    'קבלנים — הוספה/עריכה של קבלנים וסכומי התקשרות.',
+    'תקציב — ✏️ לעדכון סכום מתוכנן מול סכום ששולם בכל קטגוריה.',
+  ]},
+];
+
 export default function Tutorials() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'superadmin';
@@ -34,7 +79,7 @@ export default function Tutorials() {
   return (
     <div className="max-w-3xl">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-white">🎓 מדריכים וסרטוני הדרכה</h2>
+        <h2 className="text-xl font-bold text-white">🎓 מדריכים והדרכה</h2>
         {isSuperAdmin && (
           <button onClick={() => setShowNew(true)}
             className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm">
@@ -44,6 +89,30 @@ export default function Tutorials() {
       </div>
 
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
+
+      {/* Built-in written operating guide */}
+      <div className="mb-6">
+        <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl px-4 py-3 mb-3">
+          <p className="text-blue-300 font-semibold text-sm">📖 מדריך הפעלה למערכת</p>
+          <p className="text-blue-400/70 text-xs mt-0.5">לחצו על כל נושא כדי לפתוח את ההסבר</p>
+        </div>
+        <div className="space-y-2">
+          {GUIDE.map(sec => (
+            <details key={sec.title} className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden group">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white flex items-center gap-2 hover:bg-slate-800 list-none">
+                <span className="text-base">{sec.icon}</span>
+                <span>{sec.title}</span>
+                <span className="mr-auto text-slate-500 text-xs group-open:rotate-180 transition-transform">▾</span>
+              </summary>
+              <div className="px-4 pb-4 pt-1 border-t border-slate-800">
+                <ol className="list-decimal pr-5 space-y-1.5 text-sm text-slate-300">
+                  {sec.steps.map((s, i) => <li key={i}>{s}</li>)}
+                </ol>
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
 
       {items.length === 0 && (
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-8 text-center">
