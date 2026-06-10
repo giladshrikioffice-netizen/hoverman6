@@ -1,19 +1,69 @@
-const { DatabaseSync } = require('node:sqlite');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'gspro.db');
-const db = new DatabaseSync(DB_PATH);
+// ── Driver selection ───────────────────────────────────────
+// If DATABASE_URL is set  → PostgreSQL (production, persistent).
+// Otherwise               → SQLite via node:sqlite (local dev).
+const USE_PG = !!process.env.DATABASE_URL;
 
-db.exec(`PRAGMA journal_mode = WAL`);
-db.exec(`PRAGMA foreign_keys = ON`);
+let driver;       // { get, all, run, exec }
+let pgPool = null;
 
-function q(sql) { return db.prepare(sql); }
+// Convert SQLite-style "?" placeholders to Postgres "$1,$2,..."
+function toPgPlaceholders(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
 
-function init() {
-  db.exec(`
+if (USE_PG) {
+  const { Pool } = require('pg');
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  driver = {
+    async get(sql, params) { const r = await pgPool.query(toPgPlaceholders(sql), params); return r.rows[0]; },
+    async all(sql, params) { const r = await pgPool.query(toPgPlaceholders(sql), params); return r.rows; },
+    async run(sql, params) {
+      let text = toPgPlaceholders(sql);
+      if (/^\s*insert/i.test(text) && !/returning/i.test(text)) text += ' RETURNING *';
+      const r = await pgPool.query(text, params);
+      return { lastInsertRowid: r.rows[0]?.id, changes: r.rowCount, row: r.rows[0] };
+    },
+    async exec(sql) { await pgPool.query(sql); },
+  };
+} else {
+  const { DatabaseSync } = require('node:sqlite');
+  const DB_PATH = path.join(__dirname, '..', 'gspro.db');
+  const sdb = new DatabaseSync(DB_PATH);
+  sdb.exec(`PRAGMA journal_mode = WAL`);
+  sdb.exec(`PRAGMA foreign_keys = ON`);
+  driver = {
+    async get(sql, params) { return sdb.prepare(sql).get(...params); },
+    async all(sql, params) { return sdb.prepare(sql).all(...params); },
+    async run(sql, params) { const r = sdb.prepare(sql).run(...params); return { lastInsertRowid: r.lastInsertRowid, changes: r.changes }; },
+    async exec(sql) { sdb.exec(sql); },
+  };
+}
+
+// Public query builder — every method returns a Promise.
+// Usage: await q('SELECT ... WHERE x=?').get(x)
+function q(sql) {
+  return {
+    get: (...params) => driver.get(sql, params),
+    all: (...params) => driver.all(sql, params),
+    run: (...params) => driver.run(sql, params),
+  };
+}
+
+// ── Schema (dialect-aware via tokens) ──────────────────────
+function buildSchema() {
+  const PK  = USE_PG ? 'SERIAL PRIMARY KEY'      : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+  const TS  = USE_PG ? 'TIMESTAMPTZ'             : 'TEXT';
+  const NOW = USE_PG ? 'now()'                   : "(datetime('now'))";
+  return `
     CREATE TABLE IF NOT EXISTS buildings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       name TEXT NOT NULL,
       address TEXT,
       num_units INTEGER DEFAULT 0,
@@ -21,20 +71,19 @@ function init() {
       budget REAL DEFAULT 0,
       target_date TEXT,
       type TEXT DEFAULT 'supervision',
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at ${TS} DEFAULT ${NOW}
     );
 
-    CREATE TABLE IF NOT EXISTS unit_permissions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      unit_id INTEGER NOT NULL REFERENCES units(id),
+    CREATE TABLE IF NOT EXISTS units (
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
-      module TEXT NOT NULL,
-      enabled INTEGER DEFAULT 1,
-      UNIQUE(unit_id, module)
+      unit_number INTEGER NOT NULL,
+      floor INTEGER,
+      owner_name TEXT
     );
 
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       full_name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
@@ -43,16 +92,17 @@ function init() {
       unit_id INTEGER
     );
 
-    CREATE TABLE IF NOT EXISTS units (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE IF NOT EXISTS unit_permissions (
+      id ${PK},
+      unit_id INTEGER NOT NULL REFERENCES units(id),
       building_id INTEGER NOT NULL REFERENCES buildings(id),
-      unit_number INTEGER NOT NULL,
-      floor INTEGER,
-      owner_name TEXT
+      module TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      UNIQUE(unit_id, module)
     );
 
     CREATE TABLE IF NOT EXISTS contractors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       name TEXT NOT NULL,
       trade TEXT,
@@ -62,7 +112,7 @@ function init() {
     );
 
     CREATE TABLE IF NOT EXISTS budget_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       category TEXT NOT NULL,
       planned_amount REAL DEFAULT 0,
@@ -70,7 +120,7 @@ function init() {
     );
 
     CREATE TABLE IF NOT EXISTS payments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       unit_id INTEGER NOT NULL REFERENCES units(id),
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       amount_due REAL DEFAULT 0,
@@ -80,7 +130,7 @@ function init() {
     );
 
     CREATE TABLE IF NOT EXISTS decisions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       date TEXT NOT NULL,
       topic TEXT NOT NULL,
@@ -89,32 +139,34 @@ function init() {
     );
 
     CREATE TABLE IF NOT EXISTS updates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       visit_date TEXT NOT NULL,
       summary TEXT,
       blockers TEXT,
       next_steps TEXT,
       author TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at ${TS} DEFAULT ${NOW}
     );
 
     CREATE TABLE IF NOT EXISTS complaints (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       unit_id INTEGER NOT NULL REFERENCES units(id),
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       subject TEXT NOT NULL,
       body TEXT,
       status TEXT DEFAULT 'פתוח',
-      created_at TEXT DEFAULT (datetime('now'))
+      photo TEXT,
+      created_at ${TS} DEFAULT ${NOW}
     );
 
     CREATE TABLE IF NOT EXISTS professionals (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       name TEXT NOT NULL,
       trade TEXT,
       phone TEXT,
+      email TEXT,
       rating INTEGER DEFAULT 0,
       review TEXT,
       last_cost REAL,
@@ -122,7 +174,7 @@ function init() {
     );
 
     CREATE TABLE IF NOT EXISTS maintenance_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
       name TEXT NOT NULL,
       frequency_days INTEGER DEFAULT 365,
@@ -134,23 +186,23 @@ function init() {
     );
 
     CREATE TABLE IF NOT EXISTS tutorials (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       title TEXT NOT NULL,
       url TEXT,
       description TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at ${TS} DEFAULT ${NOW}
     );
 
     CREATE TABLE IF NOT EXISTS feedback (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       category TEXT DEFAULT 'other',
       message TEXT NOT NULL,
       contact TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at ${TS} DEFAULT ${NOW}
     );
 
     CREATE TABLE IF NOT EXISTS documents (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER REFERENCES buildings(id),
       name TEXT NOT NULL,
       description TEXT,
@@ -161,40 +213,39 @@ function init() {
       file_size INTEGER DEFAULT 0,
       visibility TEXT DEFAULT 'committee',
       uploaded_by TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at ${TS} DEFAULT ${NOW}
     );
 
     CREATE TABLE IF NOT EXISTS doc_checklist (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id ${PK},
       building_id INTEGER REFERENCES buildings(id),
       item_key TEXT NOT NULL,
       status TEXT DEFAULT 'missing',
       note TEXT,
-      updated_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
       UNIQUE(building_id, item_key)
     );
-  `);
 
-  // Add photo column to complaints if not exists
-  try { db.exec(`ALTER TABLE complaints ADD COLUMN photo TEXT`); } catch {}
-  // Add email column to professionals if not exists
-  try { db.exec(`ALTER TABLE professionals ADD COLUMN email TEXT`); } catch {}
-  // Add visibility to documents if not exists (migration safety)
-  try { db.exec(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`); } catch {}
-
-  // Key/value meta table for one-time migration flags
-  db.exec(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`);
-
-  seed();
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+  `;
 }
 
-// Run a migration only once, guarded by a flag in the meta table.
-function runOnce(key, fn) {
-  const done = q('SELECT value FROM meta WHERE key=?').get(key);
-  if (done) return;
-  fn();
-  q('INSERT OR REPLACE INTO meta (key,value) VALUES (?,?)').run(key, new Date().toISOString());
-  console.log(`✅ Migration applied: ${key}`);
+async function init() {
+  await driver.exec(buildSchema());
+
+  // Legacy SQLite DBs may miss columns added later — add them safely.
+  // (Postgres schema above already includes them, so skip there.)
+  if (!USE_PG) {
+    try { await driver.exec(`ALTER TABLE complaints ADD COLUMN photo TEXT`); } catch {}
+    try { await driver.exec(`ALTER TABLE professionals ADD COLUMN email TEXT`); } catch {}
+    try { await driver.exec(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`); } catch {}
+  }
+
+  await seed();
+  console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);
 }
 
 function addDays(dateStr, days) {
@@ -204,60 +255,69 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-function seed() {
-  const count = q('SELECT COUNT(*) as c FROM users').get();
+// Run a migration only once, guarded by a flag in the meta table.
+async function runOnce(key, fn) {
+  const done = await q('SELECT value FROM meta WHERE key=?').get(key);
+  if (done) return;
+  await fn();
+  await q('INSERT INTO meta (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+    .run(key, new Date().toISOString());
+  console.log(`✅ Migration applied: ${key}`);
+}
+
+async function seed() {
+  const count = await q('SELECT CAST(COUNT(*) AS INTEGER) as c FROM users').get();
 
   // ONE-TIME fix: correct names + reset credentials for the 3 key users.
   // Runs only once (guarded by meta flag) so user-changed passwords are NOT clobbered on every restart.
-  runOnce('fix_real_credentials_v1', () => {
-    const existingAdmin = q("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
+  await runOnce('fix_real_credentials_v1', async () => {
+    const existingAdmin = await q("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
     if (existingAdmin) {
-      q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+      await q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
         'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), existingAdmin.id
       );
     }
-    const existingShira = q("SELECT id FROM users WHERE email LIKE '%shira%' AND role='committee' LIMIT 1").get();
+    const existingShira = await q("SELECT id FROM users WHERE email LIKE '%shira%' AND role='committee' LIMIT 1").get();
     if (existingShira) {
-      q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+      await q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
         'שירה אילן', 'shirailan10@gmail.com', bcrypt.hashSync('0522929529', 10), existingShira.id
       );
     }
-    const existingAharon = q("SELECT id FROM users WHERE role='committee' AND id!=? LIMIT 1").get(existingShira?.id || 0);
+    const existingAharon = await q("SELECT id FROM users WHERE role='committee' AND id!=? LIMIT 1").get(existingShira?.id || 0);
     if (existingAharon) {
-      q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
+      await q("UPDATE users SET full_name=?,email=?,password=? WHERE id=?").run(
         'אהרון שם טוב', 'ashemtov280860@gmail.com', bcrypt.hashSync('0584766555', 10), existingAharon.id
       );
     }
-    // Fix fake names in decisions table
-    q("UPDATE decisions SET approved_by='שירה אילן' WHERE approved_by='שירה כהן'").run();
-    q("UPDATE decisions SET approved_by='אהרון שם טוב' WHERE approved_by='אהרון לוי'").run();
+    await q("UPDATE decisions SET approved_by='שירה אילן' WHERE approved_by='שירה כהן'").run();
+    await q("UPDATE decisions SET approved_by='אהרון שם טוב' WHERE approved_by='אהרון לוי'").run();
   });
 
   if (count.c > 0) return;
 
+  // ── Initial seed (first boot only) ──
   // Super admin
-  q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)').run(
+  await q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)').run(
     'גלעד שריקי', 'giladshrikioffice@gmail.com', bcrypt.hashSync('gs4798', 10), 'superadmin', null, null
   );
 
   // Building: הוברמן 6 (supervision)
-  const b1 = q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(
+  const b1 = await q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(
     'הוברמן 6', 'רחוב הוברמן 6, פתח תקווה', 28, 7, 6000000, '2026-10-01', 'supervision'
   );
   const bid = b1.lastInsertRowid;
 
-  // Units
   for (let i = 1; i <= 28; i++) {
-    q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid, i, Math.ceil(i / 4));
+    await q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid, i, Math.ceil(i / 4));
   }
 
   // Committee users
-  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('שירה אילן','shirailan10@gmail.com',bcrypt.hashSync('0522929529',10),'committee',bid);
-  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('אהרון שם טוב','ashemtov280860@gmail.com',bcrypt.hashSync('0584766555',10),'committee',bid);
+  await q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('שירה אילן','shirailan10@gmail.com',bcrypt.hashSync('0522929529',10),'committee',bid);
+  await q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('אהרון שם טוב','ashemtov280860@gmail.com',bcrypt.hashSync('0584766555',10),'committee',bid);
 
   // Resident
-  const unit1 = q('SELECT id FROM units WHERE building_id=? AND unit_number=1').get(bid);
-  q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)').run('דייר לדוגמה','resident@hoverman6.co.il',bcrypt.hashSync('123456',10),'resident',bid,unit1.id);
+  const unit1 = await q('SELECT id FROM units WHERE building_id=? AND unit_number=1').get(bid);
+  await q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)').run('דייר לדוגמה','resident@hoverman6.co.il',bcrypt.hashSync('123456',10),'resident',bid,unit1.id);
 
   // Contractors
   const contractors = [
@@ -271,7 +331,7 @@ function seed() {
     ['א. דנן','בטיחות אש','04-6918200',85000,'פעיל'],
     ['ב.מ','משאבות','03-6249541',140000,'פעיל'],
   ];
-  contractors.forEach(c => q('INSERT INTO contractors (building_id,name,trade,phone,contract_amount,status) VALUES (?,?,?,?,?,?)').run(bid,...c));
+  for (const c of contractors) await q('INSERT INTO contractors (building_id,name,trade,phone,contract_amount,status) VALUES (?,?,?,?,?,?)').run(bid,...c);
 
   // Budget
   const budget = [
@@ -279,21 +339,21 @@ function seed() {
     ['אלומיניום',420000,100000],['מיזוג',95000,0],['אינסטלציה',210000,50000],
     ['בטיחות אש',85000,85000],['משאבות',140000,0],['פיקוח ובלת"מ',900000,150000],
   ];
-  budget.forEach(b => q('INSERT INTO budget_items (building_id,category,planned_amount,paid_amount) VALUES (?,?,?,?)').run(bid,...b));
+  for (const b of budget) await q('INSERT INTO budget_items (building_id,category,planned_amount,paid_amount) VALUES (?,?,?,?)').run(bid,...b);
 
   // Payments
-  const units = q('SELECT id FROM units WHERE building_id=? ORDER BY unit_number').all(bid);
-  units.forEach((u, i) => {
+  const units = await q('SELECT id FROM units WHERE building_id=? ORDER BY unit_number').all(bid);
+  for (let i = 0; i < units.length; i++) {
     const paid = i % 3 === 0 ? 15000 : i % 3 === 1 ? 7500 : 0;
-    q('INSERT INTO payments (unit_id,building_id,amount_due,amount_paid,due_date) VALUES (?,?,?,?,?)').run(u.id,bid,15000,paid,'2026-03-01');
-  });
+    await q('INSERT INTO payments (unit_id,building_id,amount_due,amount_paid,due_date) VALUES (?,?,?,?,?)').run(units[i].id,bid,15000,paid,'2026-03-01');
+  }
 
   // Decisions
-  q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-01-15','אישור קבלן ראשי – חמודי','שירה אילן','מאושר');
-  q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-02-10','אישור ספק תריסים','אהרון שם טוב','מאושר');
+  await q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-01-15','אישור קבלן ראשי – חמודי','שירה אילן','מאושר');
+  await q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid,'2026-02-10','אישור ספק תריסים','אהרון שם טוב','מאושר');
 
   // Update
-  q('INSERT INTO updates (building_id,visit_date,summary,blockers,next_steps,author) VALUES (?,?,?,?,?,?)').run(
+  await q('INSERT INTO updates (building_id,visit_date,summary,blockers,next_steps,author) VALUES (?,?,?,?,?,?)').run(
     bid,'2026-06-01','הושלמה יציקת גגות קומה 6. התקנת שלד מרפסות בעיצומה.',
     'עיכוב באספקת ברזל – צפוי להסתדר עד 15 ביוני.',
     'המשך התקנת שלד קומות 5–6, תיאום עם ספק האלומיניום.','גלעד שריקי'
@@ -312,29 +372,29 @@ function seed() {
     ['גינון', 30, '2026-06-01', 'תקין'],
     ['ניקיון', 30, '2026-06-05', 'תקין'],
   ];
-  maintenance.forEach(([name, freq, last, status]) => {
+  for (const [name, freq, last, status] of maintenance) {
     const next = addDays(last, freq);
-    q('INSERT INTO maintenance_items (building_id,name,frequency_days,last_check,next_check,status) VALUES (?,?,?,?,?,?)').run(bid,name,freq,last,next,status);
-  });
+    await q('INSERT INTO maintenance_items (building_id,name,frequency_days,last_check,next_check,status) VALUES (?,?,?,?,?,?)').run(bid,name,freq,last,next,status);
+  }
 
   // Sample professional
-  q('INSERT INTO professionals (building_id,name,trade,phone,rating,review) VALUES (?,?,?,?,?,?)').run(bid,'רפי חשמל','חשמלאי','052-1234567',5,'מקצועי ומהיר, ממליץ בחום');
+  await q('INSERT INTO professionals (building_id,name,trade,phone,rating,review) VALUES (?,?,?,?,?,?)').run(bid,'רפי חשמל','חשמלאי','052-1234567',5,'מקצועי ומהיר, ממליץ בחום');
 
   // Default permissions for resident (unit 1)
   const DEFAULT_MODULES = ['payments','complaints','updates','decisions','maintenance','professionals','tutorials'];
-  DEFAULT_MODULES.forEach(mod => {
-    q('INSERT OR IGNORE INTO unit_permissions (unit_id,building_id,module,enabled) VALUES (?,?,?,?)').run(unit1.id, bid, mod, 1);
-  });
+  for (const mod of DEFAULT_MODULES) {
+    await q('INSERT INTO unit_permissions (unit_id,building_id,module,enabled) VALUES (?,?,?,?) ON CONFLICT(unit_id,module) DO NOTHING').run(unit1.id, bid, mod, 1);
+  }
 
   // Building 2: maintenance-only demo
-  const b2 = q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(
+  const b2 = await q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(
     'שיכון ותיקים 12', 'רחוב הרצל 12, רמת גן', 20, 5, 0, null, 'maintenance'
   );
   const bid2 = b2.lastInsertRowid;
-  for (let i = 1; i <= 20; i++) q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid2,i,Math.ceil(i/4));
-  q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('ועד רמת גן','vaad@rg12.co.il',bcrypt.hashSync('123456',10),'committee',bid2);
+  for (let i = 1; i <= 20; i++) await q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid2,i,Math.ceil(i/4));
+  await q('INSERT INTO users (full_name,email,password,role,building_id) VALUES (?,?,?,?,?)').run('ועד רמת גן','vaad@rg12.co.il',bcrypt.hashSync('123456',10),'committee',bid2);
 
   console.log('✅ GS.pro seed data inserted');
 }
 
-module.exports = { db, init, q, addDays };
+module.exports = { q, init, addDays };
