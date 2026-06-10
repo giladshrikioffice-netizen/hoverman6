@@ -50,10 +50,8 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-5 pt-4 border-t border-slate-700 text-xs text-slate-500 space-y-1 text-center">
-            <p>מנהל: gilad@gspro.co.il / admin123</p>
-            <p>ועד הוברמן: shira@hoverman6.co.il / 123456</p>
-            <p>דייר: resident@hoverman6.co.il / 123456</p>
+          <div className="mt-5 pt-4 border-t border-slate-700 text-xs text-slate-500 text-center">
+            <p>לתמיכה: gilad@gspro.co.il</p>
           </div>
         </div>
       </div>
