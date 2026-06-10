@@ -100,8 +100,13 @@ export default function Layout({ page, setPage, children }) {
         </nav>
 
         {/* Main */}
-        <main className="flex-1 p-4 md:p-6 overflow-auto bg-slate-950">
-          {children}
+        <main className="flex-1 p-4 md:p-6 overflow-auto bg-slate-950 flex flex-col">
+          <div className="flex-1">{children}</div>
+          <footer className="mt-8 pt-4 border-t border-slate-800 text-xs text-slate-600 flex justify-between items-center">
+            <span>GS.pro · גלעד שריקי פרויקטים</span>
+            <button onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'privacy' }))}
+              className="hover:text-slate-400 transition-colors">מדיניות פרטיות</button>
+          </footer>
         </main>
       </div>
     </div>

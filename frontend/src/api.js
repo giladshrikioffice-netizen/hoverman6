@@ -108,6 +108,10 @@ export const api = {
     create: d => req('POST', '/feedback', d),
   },
 
+  alerts: {
+    send: () => req('POST', '/alerts/send', {}),
+  },
+
   permissions: {
     get: (unit_id) => req('GET', `/permissions/${unit_id}`),
     all: () => req('GET', bq('/permissions')),

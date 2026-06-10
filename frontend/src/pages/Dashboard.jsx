@@ -2,6 +2,29 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
+function AlertsButton() {
+  const [status, setStatus] = useState('idle'); // idle | sending | done | err
+  const [msg, setMsg] = useState('');
+  const send = async () => {
+    setStatus('sending'); setMsg('');
+    try {
+      const r = await api.alerts.send();
+      setMsg(`✅ נשלחו ${r.sent} הודעות`);
+      setStatus('done');
+    } catch(e) { setMsg('❌ ' + e.message); setStatus('err'); }
+    setTimeout(() => setStatus('idle'), 4000);
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={send} disabled={status === 'sending'}
+        className="bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/40 text-amber-400 text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+        {status === 'sending' ? '⏳ שולח...' : '📧 שלח התראות'}
+      </button>
+      {msg && <span className="text-xs text-slate-400">{msg}</span>}
+    </div>
+  );
+}
+
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
 const pct = (a, b) => b ? Math.min(Math.round((a / b) * 100), 100) : 0;
 
@@ -32,7 +55,7 @@ function ProgressBar({ value, color = 'bg-blue-500' }) {
 }
 
 export default function Dashboard() {
-  const { building, isSupervision } = useAuth();
+  const { building, isSupervision, user } = useAuth();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
 
@@ -50,17 +73,20 @@ export default function Dashboard() {
     <div className="max-w-4xl" dir="rtl">
 
       {/* Building header */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-white">{data.building?.name || 'דשבורד'}</h2>
           <p className="text-slate-400 text-sm mt-0.5">{data.building?.address}</p>
         </div>
-        {data.building?.target_date && isSupervision && (
-          <div className="text-left bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm">
-            <p className="text-slate-500 text-xs">יעד סיום</p>
-            <p className="text-white font-semibold">{data.building.target_date}</p>
-          </div>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {data.building?.target_date && isSupervision && (
+            <div className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm">
+              <p className="text-slate-500 text-xs">יעד סיום</p>
+              <p className="text-white font-semibold">{data.building.target_date}</p>
+            </div>
+          )}
+          {user?.role === 'superadmin' && <AlertsButton />}
+        </div>
       </div>
 
       {/* === SUPERVISION SECTION === */}

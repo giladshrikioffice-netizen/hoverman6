@@ -18,6 +18,7 @@ import PermissionsManager from './pages/PermissionsManager';
 import Feedback from './pages/Feedback';
 import UsersManager from './pages/UsersManager';
 import Settings from './pages/Settings';
+import Privacy from './pages/Privacy';
 import { api } from './api';
 import './index.css';
 
@@ -29,12 +30,20 @@ const PAGES = {
   admin: AdminPanel, permissions: PermissionsManager, feedback: Feedback,
   users: UsersManager,
   settings: Settings,
+  privacy: Privacy,
 };
 
 function AppInner() {
   const { user, building, setBuilding, selectBuilding, loading } = useAuth();
   const [page, setPage] = useState('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Allow footer privacy link to navigate
+  useEffect(() => {
+    const handler = e => setPage(e.detail);
+    window.addEventListener('navigate', handler);
+    return () => window.removeEventListener('navigate', handler);
+  }, []);
 
   // Load building info when user logs in
   useEffect(() => {

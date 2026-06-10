@@ -463,6 +463,116 @@ router.get('/feedback', (req, res) => {
   } catch { res.json([]); }
 });
 
+// ── Cron: send alert emails ───────────────────────────────
+router.post('/cron/alerts', async (req, res) => {
+  const secret = req.headers['x-cron-secret'] || req.body.secret;
+  if (secret !== (process.env.CRON_SECRET || 'gspro-cron-2026')) return res.status(401).json({ error: 'לא מורשה' });
+
+  const RESEND_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_KEY) return res.status(503).json({ error: 'RESEND_API_KEY חסר' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const in14 = new Date(Date.now() + 14*86400000).toISOString().slice(0, 10);
+
+  // Gather alerts per building
+  const buildings = q('SELECT * FROM buildings').all();
+  const results = [];
+
+  for (const b of buildings) {
+    // Committee emails for this building
+    const committee = q("SELECT email,full_name FROM users WHERE building_id=? AND role IN ('committee','superadmin')").all(b.id);
+    if (!committee.length) continue;
+
+    // Maintenance alerts
+    const maintAlerts = q(`SELECT name, next_check FROM maintenance_items WHERE building_id=? AND next_check <= ? AND next_check >= ?`).all(b.id, in14, today);
+
+    // Overdue payments
+    const payAlerts = q(`SELECT u.unit_number, p.amount_due, p.amount_paid, p.due_date
+      FROM payments p JOIN units u ON p.unit_id=u.id
+      WHERE p.building_id=? AND p.due_date < ? AND p.amount_paid < p.amount_due`).all(b.id, today);
+
+    if (!maintAlerts.length && !payAlerts.length) continue;
+
+    const appUrl = process.env.APP_URL || 'https://gspro-app.vercel.app';
+
+    let bodyHtml = `
+<!DOCTYPE html><html dir="rtl" lang="he">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:32px">
+<div style="max-width:560px;margin:0 auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155">
+  <div style="text-align:center;margin-bottom:24px">
+    <div style="display:inline-block;background:#2563eb;color:#fff;font-weight:900;font-size:20px;padding:8px 18px;border-radius:10px">GS</div>
+    <h1 style="color:#fff;font-size:18px;margin:10px 0 4px">GS.pro — התראות ${b.name}</h1>
+    <p style="color:#94a3b8;font-size:13px;margin:0">${today}</p>
+  </div>`;
+
+    if (maintAlerts.length) {
+      bodyHtml += `<div style="background:#1e3a5f;border-radius:10px;padding:16px;margin-bottom:16px;border:1px solid #1e40af">
+        <h2 style="color:#60a5fa;font-size:15px;margin:0 0 10px">🔧 פריטי תחזוקה מתקרבים לתאריך בדיקה</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">`;
+      maintAlerts.forEach(m => {
+        bodyHtml += `<tr><td style="padding:4px 8px;color:#e2e8f0">${m.name}</td><td style="padding:4px 8px;color:#fbbf24;text-align:left">${m.next_check}</td></tr>`;
+      });
+      bodyHtml += `</table></div>`;
+    }
+
+    if (payAlerts.length) {
+      const total = payAlerts.reduce((s,p) => s + (p.amount_due - p.amount_paid), 0);
+      bodyHtml += `<div style="background:#3b1f1f;border-radius:10px;padding:16px;margin-bottom:16px;border:1px solid #7f1d1d">
+        <h2 style="color:#f87171;font-size:15px;margin:0 0 10px">💳 תשלומים באיחור — ${payAlerts.length} דירות</h2>
+        <p style="color:#fca5a5;font-size:13px;margin:0 0 8px">סה"כ חוב: ₪${total.toLocaleString()}</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">`;
+      payAlerts.forEach(p => {
+        bodyHtml += `<tr><td style="padding:4px 8px;color:#e2e8f0">דירה ${p.unit_number}</td><td style="padding:4px 8px;color:#f87171;text-align:left">₪${(p.amount_due-p.amount_paid).toLocaleString()} חוב</td></tr>`;
+      });
+      bodyHtml += `</table></div>`;
+    }
+
+    bodyHtml += `<div style="text-align:center;margin-top:20px">
+      <a href="${appUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-weight:bold;font-size:14px">כניסה למערכת →</a>
+    </div>
+    <p style="color:#475569;font-size:11px;text-align:center;margin-top:16px">GS.pro · גלעד שריקי פרויקטים · 050-6774798</p>
+  </div></body></html>`;
+
+    for (const cm of committee) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'GS.pro <onboarding@resend.dev>',
+            to: [cm.email],
+            subject: `⚠️ התראות GS.pro — ${b.name} | ${today}`,
+            html: bodyHtml,
+          }),
+        });
+        results.push({ building: b.name, to: cm.email, ok: true });
+      } catch(e) {
+        results.push({ building: b.name, to: cm.email, ok: false, err: e.message });
+      }
+    }
+  }
+
+  res.json({ ok: true, sent: results.length, results });
+});
+
+// ── Manual alert trigger (superadmin from dashboard) ──────
+router.post('/alerts/send', authenticate, async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  // proxy to cron endpoint internally
+  const secret = process.env.CRON_SECRET || 'gspro-cron-2026';
+  const base = `http://localhost:${process.env.PORT || 3001}`;
+  try {
+    const r = await fetch(`${base}/api/cron/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-cron-secret': secret },
+      body: JSON.stringify({}),
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Tutorials (public) ─────────────────────────────────────
 router.get('/tutorials', (req, res) => {
   res.json(q('SELECT * FROM tutorials ORDER BY id DESC').all());
