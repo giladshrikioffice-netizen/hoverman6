@@ -8,7 +8,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+// base64 files (documents up to 8MB, photos up to 5MB) inflate ~33% — allow up to 15mb
+app.use(express.json({ limit: '15mb' }));
 
 // Auth
 app.post('/api/auth/login', login);
