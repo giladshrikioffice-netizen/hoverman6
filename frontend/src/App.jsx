@@ -17,6 +17,7 @@ import Onboarding from './pages/Onboarding';
 import PermissionsManager from './pages/PermissionsManager';
 import Feedback from './pages/Feedback';
 import UsersManager from './pages/UsersManager';
+import Settings from './pages/Settings';
 import { api } from './api';
 import './index.css';
 
@@ -27,6 +28,7 @@ const PAGES = {
   professionals: Professionals, tutorials: Tutorials,
   admin: AdminPanel, permissions: PermissionsManager, feedback: Feedback,
   users: UsersManager,
+  settings: Settings,
 };
 
 function AppInner() {

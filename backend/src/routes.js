@@ -321,6 +321,128 @@ router.put('/permissions/:unit_id/:module', authenticate, requireAdminOrCommitte
   res.json({ ok: true, unit_id: uid, module: mod, enabled: enabled ? 1 : 0 });
 });
 
+// ── Users Management (superadmin) ─────────────────────────
+const bcrypt = require('bcryptjs');
+
+router.get('/users', authenticate, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const users = q('SELECT id,full_name,email,role,building_id,unit_id FROM users ORDER BY building_id,role,full_name').all();
+  res.json(users);
+});
+
+router.post('/users', authenticate, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const { full_name, email, password, role, building_id, unit_id } = req.body;
+  if (!full_name || !email || !password || !role) return res.status(400).json({ error: 'חסרים שדות חובה' });
+  const existing = q('SELECT id FROM users WHERE email=?').get(email.toLowerCase().trim());
+  if (existing) return res.status(400).json({ error: 'אימייל כבר קיים' });
+  const hashed = bcrypt.hashSync(password, 10);
+  const r = q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)')
+    .run(full_name, email.toLowerCase().trim(), hashed, role, building_id || null, unit_id || null);
+  res.json(q('SELECT id,full_name,email,role,building_id,unit_id FROM users WHERE id=?').get(r.lastInsertRowid));
+});
+
+router.put('/users/:id/password', authenticate, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const { password } = req.body;
+  if (!password || password.length < 4) return res.status(400).json({ error: 'סיסמה חייבת להיות לפחות 4 תווים' });
+  const hashed = bcrypt.hashSync(password, 10);
+  q('UPDATE users SET password=? WHERE id=?').run(hashed, req.params.id);
+  res.json({ ok: true });
+});
+
+router.put('/users/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const { full_name, email, building_id, unit_id, role } = req.body;
+  if (!full_name || !email) return res.status(400).json({ error: 'שם ואימייל הם חובה' });
+  // check email not taken by someone else
+  const existing = q('SELECT id FROM users WHERE email=? AND id!=?').get(email.toLowerCase().trim(), req.params.id);
+  if (existing) return res.status(400).json({ error: 'אימייל כבר קיים אצל משתמש אחר' });
+  q('UPDATE users SET full_name=?,email=?,building_id=?,unit_id=?,role=? WHERE id=?')
+    .run(full_name, email.toLowerCase().trim(), building_id || null, unit_id || null, role, req.params.id);
+  res.json(q('SELECT id,full_name,email,role,building_id,unit_id FROM users WHERE id=?').get(req.params.id));
+});
+
+router.delete('/users/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'לא ניתן למחוק את עצמך' });
+  q('DELETE FROM users WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Change own password (all authenticated users) ──────────
+router.put('/auth/change-password', authenticate, (req, res) => {
+  const { old_password, new_password } = req.body;
+  if (!old_password || !new_password) return res.status(400).json({ error: 'חסרים שדות' });
+  if (new_password.length < 4) return res.status(400).json({ error: 'סיסמה חייבת להיות לפחות 4 תווים' });
+  const user = q('SELECT * FROM users WHERE id=?').get(req.user.id);
+  if (!bcrypt.compareSync(old_password, user.password)) return res.status(400).json({ error: 'הסיסמה הנוכחית שגויה' });
+  q('UPDATE users SET password=? WHERE id=?').run(bcrypt.hashSync(new_password, 10), req.user.id);
+  res.json({ ok: true });
+});
+
+// ── Invite resident by email ───────────────────────────────
+router.post('/invite', authenticate, async (req, res) => {
+  if (!['superadmin','committee'].includes(req.user.role)) return res.status(403).json({ error: 'אין הרשאה' });
+  const { to_email, to_name, building_name, temp_password } = req.body;
+  if (!to_email || !to_name) return res.status(400).json({ error: 'חסרים שדות' });
+
+  const RESEND_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_KEY) return res.status(503).json({ error: 'שירות המייל לא מוגדר — הוסף RESEND_API_KEY ל-Render' });
+
+  const appUrl = process.env.APP_URL || 'https://gspro-app.vercel.app';
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:32px">
+  <div style="max-width:520px;margin:0 auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="display:inline-block;background:#2563eb;color:#fff;font-weight:900;font-size:22px;padding:10px 20px;border-radius:12px">GS</div>
+      <h1 style="color:#fff;font-size:22px;margin:12px 0 4px">GS.pro</h1>
+      <p style="color:#94a3b8;margin:0;font-size:14px">ניהול בניינים חכם</p>
+    </div>
+    <h2 style="color:#fff;font-size:18px;margin-bottom:8px">שלום ${to_name} 👋</h2>
+    <p style="color:#cbd5e1;line-height:1.7;margin-bottom:20px">
+      הוזמנת להצטרף למערכת <strong style="color:#60a5fa">GS.pro</strong> — תיק הבניין הדיגיטלי של <strong>${building_name || 'הבניין שלך'}</strong>.
+    </p>
+    <div style="background:#0f172a;border-radius:10px;padding:20px;margin-bottom:24px;border:1px solid #1e40af">
+      <p style="margin:0 0 8px;color:#94a3b8;font-size:13px">פרטי כניסה:</p>
+      <p style="margin:4px 0;color:#fff"><strong>אימייל:</strong> ${to_email}</p>
+      <p style="margin:4px 0;color:#fff"><strong>סיסמה זמנית:</strong> <span style="background:#1e3a8a;padding:2px 8px;border-radius:4px;font-family:monospace">${temp_password || '123456'}</span></p>
+    </div>
+    <div style="text-align:center;margin-bottom:24px">
+      <a href="${appUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:bold;font-size:16px">
+        כניסה למערכת →
+      </a>
+    </div>
+    <p style="color:#64748b;font-size:12px;text-align:center;margin:0">
+      מומלץ לשנות סיסמה לאחר הכניסה הראשונה.<br>
+      שאלות? פנה לגלעד שריקי · giladshrikioffice@gmail.com
+    </p>
+  </div>
+</body>
+</html>`;
+
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'GS.pro <onboarding@resend.dev>',
+        to: [to_email],
+        subject: `הזמנה למערכת GS.pro — ${building_name || 'הבניין שלך'}`,
+        html,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.message || 'שגיאה בשליחה');
+    res.json({ ok: true, id: data.id });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Feedback ──────────────────────────────────────────────
 router.post('/feedback', (req, res) => {
   const { category, message, contact } = req.body;

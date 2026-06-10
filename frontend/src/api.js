@@ -26,6 +26,9 @@ function bq(path) {
 export const api = {
   login: (email, password) => req('POST', '/auth/login', { email, password }),
   me: () => req('GET', '/auth/me'),
+  auth: {
+    changePassword: (old_password, new_password) => req('PUT', '/auth/change-password', { old_password, new_password }),
+  },
 
   buildings: {
     list: () => req('GET', '/buildings'),
@@ -114,7 +117,9 @@ export const api = {
   users: {
     list: () => req('GET', '/users'),
     create: d => req('POST', '/users', d),
+    update: (id, d) => req('PUT', `/users/${id}`, d),
     resetPassword: (id, password) => req('PUT', `/users/${id}/password`, { password }),
     del: id => req('DELETE', `/users/${id}`),
+    invite: d => req('POST', '/invite', d),
   },
 };

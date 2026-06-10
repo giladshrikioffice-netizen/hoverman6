@@ -17,6 +17,7 @@ const NAV_ALL = [
   { key: 'complaints',    label: 'פניות דיירים',    icon: '📩', module: 'complaints' },
   { key: 'tutorials',     label: 'מדריכים',         icon: '🎓', module: 'tutorials' },
   { key: 'feedback',      label: 'פידבק ושיפורים',  icon: '💬' },
+  { key: 'settings',      label: 'הגדרות חשבון',    icon: '⚙️' },
 ];
 
 const NAV_COMMITTEE_EXTRA = [
