@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import DemoBadge, { demoTint } from '../components/DemoBadge';
 
-const EMPTY = { name: '', trade: '', phone: '', email: '', rating: 5, review: '', last_cost: '', last_service_date: '' };
+const EMPTY = { name: '', trade: '', phone: '', email: '', rating: 5, review: '', last_cost: '', last_service_date: '', service_years: '' };
 
 function Stars({ rating, onChange }) {
   return (
@@ -64,10 +65,10 @@ export default function Professionals() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map(r => (
-          <div key={r.id} className="bg-slate-900 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors">
+          <div key={r.id} className={`bg-slate-900 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors ${demoTint(r.is_demo)}`}>
             <div className="flex justify-between items-start mb-2">
               <div>
-                <h3 className="font-semibold text-white">{r.name}</h3>
+                <h3 className="font-semibold text-white flex items-center gap-2">{r.name} <DemoBadge show={r.is_demo} /></h3>
                 <p className="text-slate-400 text-xs">{r.trade}</p>
               </div>
               {canEdit && (
@@ -98,7 +99,9 @@ export default function Professionals() {
               )}
               {r.last_cost && <p>💰 טיפול אחרון: ₪{Number(r.last_cost).toLocaleString()}</p>}
               {r.last_service_date && <p>📅 {r.last_service_date}</p>}
+              {r.service_years && <p>🗓️ נותן שירות: {r.service_years}</p>}
               {r.review && <p className="text-slate-300 mt-1 bg-slate-800 rounded px-2 py-1">"{r.review}"</p>}
+              {r.added_by && <p className="text-slate-600 text-[11px] mt-1">נוסף ע"י: {r.added_by}</p>}
             </div>
           </div>
         ))}
@@ -109,7 +112,7 @@ export default function Professionals() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-4">{editing === 'new' ? 'איש מקצוע חדש' : 'עריכה'}</h3>
-            {[['name','שם'],['trade','תחום'],['phone','📞 טלפון'],['email','✉️ אימייל','email'],['last_cost','עלות טיפול אחרון (₪)'],['last_service_date','תאריך טיפול אחרון','date']].map(([k,l,t]) => (
+            {[['name','שם'],['trade','תחום'],['phone','📞 טלפון'],['email','✉️ אימייל','email'],['service_years','🗓️ כמה שנים נותן שירות (למשל "3 שנים")'],['last_cost','עלות טיפול אחרון (₪)'],['last_service_date','תאריך טיפול אחרון','date']].map(([k,l,t]) => (
               <div key={k} className="mb-3">
                 <label className="block text-xs text-slate-400 mb-1">{l}</label>
                 <input type={t||'text'} value={form[k]||''} onChange={e => setForm(p=>({...p,[k]:e.target.value}))}

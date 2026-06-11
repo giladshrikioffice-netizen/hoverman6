@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import DemoBadge from '../components/DemoBadge';
 
 const ROLES = [
   { value: 'superadmin', label: '👑 מנהל מערכת' },
@@ -157,7 +158,7 @@ export default function UsersManager() {
           <tbody>
             {filtered.map((u, i) => (
               <tr key={u.id} className={`border-b border-slate-800 ${i%2===0?'':'bg-slate-900/40'} hover:bg-slate-800/30 transition-colors`}>
-                <td className="px-4 py-3 text-white font-medium">{u.full_name}</td>
+                <td className="px-4 py-3 text-white font-medium"><span className="flex items-center gap-2">{u.full_name} <DemoBadge show={u.is_demo} /></span></td>
                 <td className="px-4 py-3 text-slate-400 text-xs">{u.email}</td>
                 <td className="px-4 py-3">
                   <span className={`border text-xs px-2 py-0.5 rounded-full ${ROLE_BADGE[u.role]}`}>

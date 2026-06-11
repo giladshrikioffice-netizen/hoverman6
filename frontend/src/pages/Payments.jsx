@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import DemoBadge from '../components/DemoBadge';
 
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
 const STATUS_COLOR = { 'שולם במלואו':'bg-green-500/20 text-green-400 border-green-500/30', 'שולם חלקית':'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', 'לא שולם':'bg-red-500/20 text-red-400 border-red-500/30' };
@@ -68,7 +69,7 @@ export default function Payments() {
           <tbody>
             {filtered.map(r=>(
               <tr key={r.id} className="border-b border-slate-800 hover:bg-slate-800/50">
-                <td className="px-3 py-2 font-medium text-white">{r.unit_number}</td>
+                <td className="px-3 py-2 font-medium text-white"><span className="flex items-center gap-1.5">{r.unit_number} <DemoBadge show={r.is_demo} /></span></td>
                 <td className="px-3 py-2 text-slate-400 text-xs">{r.owner_name||'—'}</td>
                 <td className="px-3 py-2 text-slate-300">{fmt(r.amount_due)}</td>
                 <td className="px-3 py-2 text-green-400">{fmt(r.amount_paid)}</td>

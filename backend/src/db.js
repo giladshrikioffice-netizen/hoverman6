@@ -236,13 +236,22 @@ function buildSchema() {
 async function init() {
   await driver.exec(buildSchema());
 
-  // Legacy SQLite DBs may miss columns added later — add them safely.
-  // (Postgres schema above already includes them, so skip there.)
+  // Add columns that may be missing on existing DBs (both dialects; duplicate-column errors are ignored).
+  const addCol = async (sql) => { try { await driver.exec(sql); } catch {} };
   if (!USE_PG) {
-    try { await driver.exec(`ALTER TABLE complaints ADD COLUMN photo TEXT`); } catch {}
-    try { await driver.exec(`ALTER TABLE professionals ADD COLUMN email TEXT`); } catch {}
-    try { await driver.exec(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`); } catch {}
+    await addCol(`ALTER TABLE complaints ADD COLUMN photo TEXT`);
+    await addCol(`ALTER TABLE professionals ADD COLUMN email TEXT`);
+    await addCol(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`);
   }
+  // is_demo flag — marks data seeded by the system (not entered by the user) so the UI can highlight it.
+  await addCol(`ALTER TABLE buildings ADD COLUMN is_demo INTEGER DEFAULT 0`);
+  await addCol(`ALTER TABLE users ADD COLUMN is_demo INTEGER DEFAULT 0`);
+  await addCol(`ALTER TABLE professionals ADD COLUMN is_demo INTEGER DEFAULT 0`);
+  await addCol(`ALTER TABLE decisions ADD COLUMN is_demo INTEGER DEFAULT 0`);
+  await addCol(`ALTER TABLE payments ADD COLUMN is_demo INTEGER DEFAULT 0`);
+  // professionals: who added the provider + how long they've serviced (req #10)
+  await addCol(`ALTER TABLE professionals ADD COLUMN added_by TEXT`);
+  await addCol(`ALTER TABLE professionals ADD COLUMN service_years TEXT`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);
@@ -291,6 +300,18 @@ async function seed() {
     }
     await q("UPDATE decisions SET approved_by='שירה אילן' WHERE approved_by='שירה כהן'").run();
     await q("UPDATE decisions SET approved_by='אהרון שם טוב' WHERE approved_by='אהרון לוי'").run();
+  });
+
+  // ONE-TIME: flag the data the SYSTEM fabricated (no user sourcing) so the UI highlights it.
+  // The user reviews/edits/deletes these; real data they entered stays unmarked.
+  await runOnce('mark_demo_v1', async () => {
+    await q("UPDATE buildings SET is_demo=1 WHERE name='שיכון ותיקים 12'").run();
+    await q("UPDATE users SET is_demo=1 WHERE email IN ('resident@hoverman6.co.il','vaad@rg12.co.il')").run();
+    await q("UPDATE professionals SET is_demo=1 WHERE name='רפי חשמל'").run();
+    // sample decisions seeded by the system
+    await q("UPDATE decisions SET is_demo=1 WHERE topic IN ('אישור קבלן ראשי – חמודי','אישור ספק תריסים')").run();
+    // all seeded payment amounts are placeholders (15000 due) — flag for review
+    await q("UPDATE payments SET is_demo=1 WHERE amount_due=15000 AND due_date='2026-03-01'").run();
   });
 
   if (count.c > 0) return;

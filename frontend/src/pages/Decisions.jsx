@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import DemoBadge, { demoTint } from '../components/DemoBadge';
 
 const EMPTY = { date:'', topic:'', approved_by:'', status:'ממתין' };
 const STATUS_COLOR = { 'מאושר':'bg-green-500/20 text-green-400 border-green-500/30', 'ממתין':'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', 'נדחה':'bg-red-500/20 text-red-400 border-red-500/30' };
@@ -8,12 +9,19 @@ const STATUS_COLOR = { 'מאושר':'bg-green-500/20 text-green-400 border-green
 export default function Decisions() {
   const { user } = useAuth();
   const canEdit = ['superadmin','admin','committee'].includes(user?.role);
+  const canDelete = ['superadmin','admin'].includes(user?.role);
   const [rows, setRows] = useState([]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [err, setErr] = useState('');
 
   useEffect(() => { api.decisions.list().then(setRows).catch(e=>setErr(e.message)); }, []);
+
+  const del = async id => {
+    if (!confirm('למחוק החלטה זו?')) return;
+    try { await api.decisions.del(id); setRows(p=>p.filter(x=>x.id!==id)); }
+    catch(e) { setErr(e.message); }
+  };
 
   const save = async () => {
     try {
@@ -33,15 +41,16 @@ export default function Decisions() {
 
       <div className="space-y-3">
         {rows.map(r=>(
-          <div key={r.id} className="bg-slate-900 border border-slate-700 rounded-xl p-4 border-r-2 border-r-blue-500">
+          <div key={r.id} className={`bg-slate-900 border border-slate-700 rounded-xl p-4 border-r-2 border-r-blue-500 ${demoTint(r.is_demo)}`}>
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <p className="font-semibold text-white">{r.topic}</p>
+                <p className="font-semibold text-white flex items-center gap-2">{r.topic} <DemoBadge show={r.is_demo} /></p>
                 <p className="text-xs text-slate-500 mt-1">{r.date} | אישר: {r.approved_by||'—'}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`px-2 py-0.5 rounded-full text-xs border ${STATUS_COLOR[r.status]||''}`}>{r.status}</span>
                 {canEdit && <button onClick={()=>{setForm(r);setEditing(r.id);}} className="text-blue-400 text-xs">✏️</button>}
+                {canDelete && <button onClick={()=>del(r.id)} className="text-red-400 text-xs">🗑️</button>}
               </div>
             </div>
           </div>

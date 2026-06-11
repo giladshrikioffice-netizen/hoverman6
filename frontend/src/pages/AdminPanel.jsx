@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import DemoBadge, { demoTint } from '../components/DemoBadge';
 
 const EMPTY = { name: '', address: '', num_units: '', num_floors: '', budget: '', target_date: '' };
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
@@ -44,10 +45,10 @@ export default function AdminPanel({ onSelectBuilding }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {buildings.map(b => (
-          <div key={b.id} className="bg-slate-900 border border-slate-700 rounded-xl p-4 hover:border-blue-500/50 transition-colors">
+          <div key={b.id} className={`bg-slate-900 border border-slate-700 rounded-xl p-4 hover:border-blue-500/50 transition-colors ${demoTint(b.is_demo)}`}>
             <div className="flex justify-between items-start mb-3">
               <div>
-                <h3 className="font-bold text-white">{b.name}</h3>
+                <h3 className="font-bold text-white flex items-center gap-2">{b.name} <DemoBadge show={b.is_demo} /></h3>
                 <p className="text-slate-400 text-xs mt-0.5">{b.address}</p>
               </div>
               <div className="flex gap-2">

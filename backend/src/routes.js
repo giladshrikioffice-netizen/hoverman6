@@ -259,13 +259,13 @@ router.get('/professionals', authenticate, ah(async (req, res) => {
 }));
 router.post('/professionals', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const bid = getBid(req);
-  const { name, trade, phone, email, rating, review, last_cost, last_service_date } = req.body;
-  const r = await q('INSERT INTO professionals (building_id,name,trade,phone,email,rating,review,last_cost,last_service_date) VALUES (?,?,?,?,?,?,?,?,?)').run(bid, name, trade, phone, email||'', rating||0, review||'', last_cost||null, last_service_date||null);
+  const { name, trade, phone, email, rating, review, last_cost, last_service_date, service_years } = req.body;
+  const r = await q('INSERT INTO professionals (building_id,name,trade,phone,email,rating,review,last_cost,last_service_date,service_years,added_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(bid, name, trade, phone, email||'', rating||0, review||'', last_cost||null, last_service_date||null, service_years||'', req.user.full_name);
   res.json(await q('SELECT * FROM professionals WHERE id=?').get(r.lastInsertRowid));
 }));
 router.put('/professionals/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
-  const { name, trade, phone, email, rating, review, last_cost, last_service_date } = req.body;
-  await q('UPDATE professionals SET name=?,trade=?,phone=?,email=?,rating=?,review=?,last_cost=?,last_service_date=? WHERE id=?').run(name, trade, phone, email||'', rating, review, last_cost, last_service_date, req.params.id);
+  const { name, trade, phone, email, rating, review, last_cost, last_service_date, service_years } = req.body;
+  await q('UPDATE professionals SET name=?,trade=?,phone=?,email=?,rating=?,review=?,last_cost=?,last_service_date=?,service_years=? WHERE id=?').run(name, trade, phone, email||'', rating, review, last_cost, last_service_date, service_years||'', req.params.id);
   res.json(await q('SELECT * FROM professionals WHERE id=?').get(req.params.id));
 }));
 router.delete('/professionals/:id', authenticate, requireAdmin, ah(async (req, res) => {
@@ -320,7 +320,7 @@ router.put('/permissions/:unit_id/:module', authenticate, requireAdminOrCommitte
 // ── Users Management (superadmin) ─────────────────────────
 router.get('/users', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const users = await q('SELECT id,full_name,email,role,building_id,unit_id FROM users ORDER BY building_id,role,full_name').all();
+  const users = await q('SELECT id,full_name,email,role,building_id,unit_id,is_demo FROM users ORDER BY building_id,role,full_name').all();
   res.json(users);
 }));
 
