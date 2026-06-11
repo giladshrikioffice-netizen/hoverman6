@@ -13,13 +13,22 @@ export default function Payments() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
   const [search, setSearch] = useState('');
+  const [sending, setSending] = useState(null);
 
   useEffect(() => { api.payments.list().then(setRows).catch(e=>setErr(e.message)); }, []);
 
   const save = async () => {
     try { const r = await api.payments.update(editing,form); setRows(p=>p.map(x=>x.id===editing?r:x)); setEditing(null); }
     catch(e) { setErr(e.message); }
+  };
+
+  const demand = async (id) => {
+    setSending(id); setErr(''); setMsg('');
+    try { const r = await api.payments.demand(id); setMsg(`📧 דרישת תשלום נשלחה אל ${r.to}`); }
+    catch(e) { setErr(e.message); }
+    setSending(null);
   };
 
   const filtered = rows.filter(r => !search || String(r.unit_number).includes(search) || (r.owner_name||'').includes(search));
@@ -49,6 +58,7 @@ export default function Payments() {
           className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none w-44" />
       </div>
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
+      {msg && <div className="bg-emerald-900/30 border border-emerald-700 text-emerald-400 px-3 py-2 rounded mb-3 text-sm">{msg}</div>}
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[['סה״כ לגביה',fmt(totals.due),'blue'],['שולם',fmt(totals.paid),'green'],['יתרת חוב',fmt(totals.due-totals.paid),'red']].map(([l,v,c])=>(
@@ -62,7 +72,7 @@ export default function Payments() {
       <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-700">
-            <tr>{['דירה','בעלים','לתשלום','שולם','יתרה','סטטוס',...(canEdit?['פעולות']:[])].map(h=>(
+            <tr>{['דירה','בעלים','סוג','מועד גבייה','לתשלום','שולם','יתרה','סטטוס',...(canEdit?['פעולות']:[])].map(h=>(
               <th key={h} className="px-3 py-3 text-right text-xs font-medium text-slate-400">{h}</th>
             ))}</tr>
           </thead>
@@ -71,12 +81,16 @@ export default function Payments() {
               <tr key={r.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                 <td className="px-3 py-2 font-medium text-white"><span className="flex items-center gap-1.5">{r.unit_number} <DemoBadge show={r.is_demo} /></span></td>
                 <td className="px-3 py-2 text-slate-400 text-xs">{r.owner_name||'—'}</td>
+                <td className="px-3 py-2 text-slate-400 text-xs">{r.payment_type||'—'}{r.period_label?` · ${r.period_label}`:''}</td>
+                <td className="px-3 py-2 text-slate-400 text-xs">{r.due_date||'—'}</td>
                 <td className="px-3 py-2 text-slate-300">{fmt(r.amount_due)}</td>
                 <td className="px-3 py-2 text-green-400">{fmt(r.amount_paid)}</td>
                 <td className={`px-3 py-2 font-medium ${r.balance>0?'text-red-400':'text-green-400'}`}>{fmt(r.balance)}</td>
                 <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs border ${STATUS_COLOR[r.status]||''}`}>{r.status}</span></td>
-                {canEdit && <td className="px-3 py-2">
-                  <button onClick={()=>{ setForm({amount_due:r.amount_due,amount_paid:r.amount_paid,due_date:r.due_date||'',note:r.note||''}); setEditing(r.id); }} className="text-blue-400 hover:text-blue-300 text-xs">✏️</button>
+                {canEdit && <td className="px-3 py-2 whitespace-nowrap">
+                  <button onClick={()=>{ setForm({amount_due:r.amount_due,amount_paid:r.amount_paid,due_date:r.due_date||'',note:r.note||'',payment_type:r.payment_type||'חד-פעמי',period_label:r.period_label||''}); setEditing(r.id); }} className="text-blue-400 hover:text-blue-300 text-xs">✏️</button>
+                  {r.balance>0 && <button onClick={()=>demand(r.id)} disabled={sending===r.id} title="שלח דרישת תשלום במייל לדייר"
+                    className="text-amber-400 hover:text-amber-300 text-xs mr-2 disabled:opacity-50">{sending===r.id?'שולח...':'📧 דרישה'}</button>}
                 </td>}
               </tr>
             ))}
@@ -95,8 +109,20 @@ export default function Payments() {
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             ))}
+            <div className="mb-3">
+              <label className="block text-xs text-slate-400 mb-1">סוג תשלום</label>
+              <select value={form.payment_type||'חד-פעמי'} onChange={e=>setForm(p=>({...p,payment_type:e.target.value}))}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {['חד-פעמי','חודשי','שנתי'].map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="mb-3">
+              <label className="block text-xs text-slate-400 mb-1">תקופה (אופציונלי, למשל "מאי 2026")</label>
+              <input value={form.period_label||''} onChange={e=>setForm(p=>({...p,period_label:e.target.value}))}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
             <div className="mb-4">
-              <label className="block text-xs text-slate-400 mb-1">תאריך לתשלום</label>
+              <label className="block text-xs text-slate-400 mb-1">מועד גבייה</label>
               <input type="date" value={form.due_date||''} onChange={e=>setForm(p=>({...p,due_date:e.target.value}))}
                 className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>

@@ -252,6 +252,9 @@ async function init() {
   // professionals: who added the provider + how long they've serviced (req #10)
   await addCol(`ALTER TABLE professionals ADD COLUMN added_by TEXT`);
   await addCol(`ALTER TABLE professionals ADD COLUMN service_years TEXT`);
+  // payments: type (monthly/yearly/one-time) + a free-text period label (req #11)
+  await addCol(`ALTER TABLE payments ADD COLUMN payment_type TEXT DEFAULT 'חד-פעמי'`);
+  await addCol(`ALTER TABLE payments ADD COLUMN period_label TEXT`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);

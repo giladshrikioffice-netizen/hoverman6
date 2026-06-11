@@ -135,9 +135,58 @@ router.get('/payments', authenticate, ah(async (req, res) => {
   res.json(await q(paymentSelect + ' WHERE p.building_id=? ORDER BY u.unit_number').all(bid));
 }));
 router.put('/payments/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
-  const { amount_due, amount_paid, due_date, note } = req.body;
-  await q('UPDATE payments SET amount_due=?,amount_paid=?,due_date=?,note=? WHERE id=?').run(amount_due, amount_paid, due_date, note, req.params.id);
+  const { amount_due, amount_paid, due_date, note, payment_type, period_label } = req.body;
+  await q('UPDATE payments SET amount_due=?,amount_paid=?,due_date=?,note=?,payment_type=?,period_label=? WHERE id=?')
+    .run(amount_due, amount_paid, due_date, note, payment_type||'חד-פעמי', period_label||'', req.params.id);
   res.json(await q(paymentSelect + ' WHERE p.id=?').get(req.params.id));
+}));
+
+// Send a payment-demand email to the unit's resident (req #11)
+router.post('/payments/:id/demand', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const RESEND_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_KEY) return res.status(503).json({ error: 'שירות המייל לא מוגדר — הוסף RESEND_API_KEY ל-Render' });
+
+  const pay = await q(paymentSelect + ' WHERE p.id=?').get(req.params.id);
+  if (!pay) return res.status(404).json({ error: 'תשלום לא נמצא' });
+  const balance = (pay.amount_due || 0) - (pay.amount_paid || 0);
+  if (balance <= 0) return res.status(400).json({ error: 'אין יתרת חוב לדירה זו' });
+
+  // Find the resident user of this unit (they hold the email)
+  const resident = await q("SELECT full_name,email FROM users WHERE unit_id=? AND role='resident' LIMIT 1").get(pay.unit_id);
+  const toEmail = req.body.to_email || resident?.email;
+  if (!toEmail) return res.status(400).json({ error: 'לא נמצא אימייל לדייר של דירה זו — הוסף דייר עם אימייל, או ספק כתובת ידנית' });
+
+  const building = await q('SELECT name FROM buildings WHERE id=?').get(pay.building_id);
+  const typeLabel = pay.payment_type || 'חד-פעמי';
+  const appUrl = process.env.APP_URL || 'https://gspro-app.vercel.app';
+  const html = `
+<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:32px">
+<div style="max-width:520px;margin:0 auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155">
+  <div style="text-align:center;margin-bottom:20px">
+    <div style="display:inline-block;background:#2563eb;color:#fff;font-weight:900;font-size:20px;padding:8px 18px;border-radius:10px">GS</div>
+    <h1 style="color:#fff;font-size:18px;margin:10px 0 4px">דרישת תשלום — ${building?.name || ''}</h1>
+  </div>
+  <p style="color:#cbd5e1;line-height:1.7">שלום ${resident?.full_name || 'דייר יקר'},</p>
+  <p style="color:#cbd5e1;line-height:1.7">להלן פירוט החוב עבור דירה ${pay.unit_number}${pay.period_label ? ' — ' + pay.period_label : ''}:</p>
+  <div style="background:#0f172a;border-radius:10px;padding:18px;margin:16px 0;border:1px solid #1e40af">
+    <p style="margin:4px 0;color:#94a3b8">סוג תשלום: <span style="color:#fff">${typeLabel}</span></p>
+    <p style="margin:4px 0;color:#94a3b8">סכום לתשלום: <span style="color:#fff">₪${(pay.amount_due||0).toLocaleString()}</span></p>
+    <p style="margin:4px 0;color:#94a3b8">שולם: <span style="color:#fff">₪${(pay.amount_paid||0).toLocaleString()}</span></p>
+    <p style="margin:8px 0 0;color:#f87171;font-weight:bold;font-size:17px">יתרה לתשלום: ₪${balance.toLocaleString()}</p>
+    ${pay.due_date ? `<p style="margin:8px 0 0;color:#fbbf24">מועד גבייה: ${pay.due_date}</p>` : ''}
+  </div>
+  <p style="color:#64748b;font-size:12px;text-align:center;margin-top:20px">נשלח ממערכת GS.pro · גלעד שריקי פרויקטים · 050-6774798</p>
+</div></body></html>`;
+
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'GS.pro <onboarding@resend.dev>', to: [toEmail], subject: `דרישת תשלום — דירה ${pay.unit_number} | ${building?.name || 'GS.pro'}`, html }),
+  });
+  const data = await r.json();
+  if (!r.ok) return res.status(500).json({ error: data.message || 'שגיאה בשליחה' });
+  res.json({ ok: true, to: toEmail, balance });
 }));
 
 // ── Units ──────────────────────────────────────────────────
