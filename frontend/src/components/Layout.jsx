@@ -6,6 +6,7 @@ const NAV_ALL = [
   { key: 'dashboard',     label: 'סקירת הבניין',  icon: '🏗️' },
   // Supervision (shown only for supervision buildings)
   { key: 'updates',       label: 'יומן פיקוח',    icon: '📋', supervisionOnly: true },
+  { key: 'monthly',       label: 'דוח חודשי',      icon: '🗓️', supervisionOnly: true, staffOnly: true },
   { key: 'documents',     label: 'תיק בניין',      icon: '📁', supervisionOnly: true },
   { key: 'contractors',   label: 'קבלנים',         icon: '👷', supervisionOnly: true },
   { key: 'budget',        label: 'תקציב פרויקט',   icon: '💰', supervisionOnly: true },
@@ -47,6 +48,7 @@ export default function Layout({ page, setPage, children }) {
   const nav = [
     ...baseNav.filter(n => {
       if (n.supervisionOnly && !isSupervision) return false;
+      if (n.staffOnly && user?.role === 'resident') return false;
       if (n.module && !hasAccess(n.module)) return false;
       return true;
     }),

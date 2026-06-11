@@ -20,6 +20,7 @@ import UsersManager from './pages/UsersManager';
 import Settings from './pages/Settings';
 import Privacy from './pages/Privacy';
 import Documents from './pages/Documents';
+import MonthlyReport from './pages/MonthlyReport';
 import { api } from './api';
 import './index.css';
 
@@ -33,6 +34,7 @@ const PAGES = {
   settings: Settings,
   privacy: Privacy,
   documents: Documents,
+  monthly: MonthlyReport,
 };
 
 function AppInner() {
