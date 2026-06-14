@@ -226,6 +226,19 @@ function buildSchema() {
       UNIQUE(building_id, item_key)
     );
 
+    CREATE TABLE IF NOT EXISTS monthly_reports (
+      id ${PK},
+      building_id INTEGER NOT NULL REFERENCES buildings(id),
+      month TEXT NOT NULL,
+      title TEXT,
+      summary TEXT,
+      docs TEXT,
+      status TEXT DEFAULT 'draft',
+      author TEXT,
+      published_at TEXT,
+      created_at ${TS} DEFAULT ${NOW}
+    );
+
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
       value TEXT

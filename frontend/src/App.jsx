@@ -22,6 +22,7 @@ import Privacy from './pages/Privacy';
 import Documents from './pages/Documents';
 import MonthlyReport from './pages/MonthlyReport';
 import BackgroundChecks from './pages/BackgroundChecks';
+import ReportsModule from './pages/ReportsModule';
 import { api } from './api';
 import './index.css';
 
@@ -37,6 +38,7 @@ const PAGES = {
   documents: Documents,
   monthly: MonthlyReport,
   bgchecks: BackgroundChecks,
+  reports: ReportsModule,
 };
 
 function AppInner() {

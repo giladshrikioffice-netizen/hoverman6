@@ -113,6 +113,13 @@ export const api = {
 
   bgChecks: () => req('GET', '/bg-checks'),
 
+  monthlyReports: {
+    list: () => req('GET', bq('/monthly-reports')),
+    create: d => req('POST', '/monthly-reports', { ...d, building_id: getBid() }),
+    update: (id, d) => req('PUT', `/monthly-reports/${id}`, d),
+    del: id => req('DELETE', `/monthly-reports/${id}`),
+  },
+
   alerts: {
     send: () => req('POST', '/alerts/send', {}),
   },

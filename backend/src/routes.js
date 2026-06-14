@@ -230,8 +230,9 @@ router.delete('/decisions/:id', authenticate, requireAdmin, ah(async (req, res) 
   res.json({ ok: true });
 }));
 
-// ── Updates ────────────────────────────────────────────────
+// ── Updates (routine visit logs — committee/staff only, req #3) ─────
 router.get('/updates', authenticate, ah(async (req, res) => {
+  if (req.user.role === 'resident') return res.status(403).json({ error: 'אזור זה מיועד לוועד הבית' });
   const bid = getBid(req);
   res.json(await q('SELECT * FROM updates WHERE building_id=? ORDER BY visit_date DESC').all(bid));
 }));
@@ -276,6 +277,39 @@ router.put('/complaints/:id', authenticate, requireAdminOrCommittee, ah(async (r
 }));
 router.delete('/complaints/:id', authenticate, requireAdmin, ah(async (req, res) => {
   await q('DELETE FROM complaints WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+}));
+
+// ── Monthly inspection reports (req #3) ────────────────────
+// Committee composes a report (with attached docs) and publishes it;
+// residents see it ONLY once published.
+router.get('/monthly-reports', authenticate, ah(async (req, res) => {
+  const bid = getBid(req);
+  const staff = ['superadmin','admin','committee'].includes(req.user.role);
+  const rows = staff
+    ? await q('SELECT * FROM monthly_reports WHERE building_id=? ORDER BY month DESC, id DESC').all(bid)
+    : await q("SELECT * FROM monthly_reports WHERE building_id=? AND status='published' ORDER BY month DESC, id DESC").all(bid);
+  res.json(rows.map(r => ({ ...r, docs: r.docs ? JSON.parse(r.docs) : [] })));
+}));
+router.post('/monthly-reports', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const bid = getBid(req);
+  const { month, title, summary, docs } = req.body;
+  if (!month) return res.status(400).json({ error: 'חסר חודש' });
+  const r = await q('INSERT INTO monthly_reports (building_id,month,title,summary,docs,status,author) VALUES (?,?,?,?,?,?,?)')
+    .run(bid, month, title||'', summary||'', JSON.stringify(docs||[]), 'draft', req.user.full_name);
+  const row = await q('SELECT * FROM monthly_reports WHERE id=?').get(r.lastInsertRowid);
+  res.json({ ...row, docs: row.docs ? JSON.parse(row.docs) : [] });
+}));
+router.put('/monthly-reports/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const { month, title, summary, docs, status } = req.body;
+  const publishedAt = status === 'published' ? new Date().toISOString().slice(0,10) : null;
+  await q('UPDATE monthly_reports SET month=?,title=?,summary=?,docs=?,status=?,published_at=? WHERE id=?')
+    .run(month, title||'', summary||'', JSON.stringify(docs||[]), status||'draft', publishedAt, req.params.id);
+  const row = await q('SELECT * FROM monthly_reports WHERE id=?').get(req.params.id);
+  res.json({ ...row, docs: row.docs ? JSON.parse(row.docs) : [] });
+}));
+router.delete('/monthly-reports/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  await q('DELETE FROM monthly_reports WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 }));
 

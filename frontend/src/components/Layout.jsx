@@ -5,8 +5,9 @@ import { useAuth } from '../AuthContext';
 const NAV_ALL = [
   { key: 'dashboard',     label: 'סקירת הבניין',  icon: '🏗️' },
   // Supervision (shown only for supervision buildings)
-  { key: 'updates',       label: 'יומן פיקוח',    icon: '📋', supervisionOnly: true },
+  { key: 'updates',       label: 'יומן פיקוח',    icon: '📋', supervisionOnly: true, staffOnly: true },
   { key: 'monthly',       label: 'דוח חודשי',      icon: '🗓️', supervisionOnly: true, staffOnly: true },
+  { key: 'reports',       label: 'דוחות חודשיים',  icon: '📑', supervisionOnly: true },
   { key: 'documents',     label: 'תיק בניין',      icon: '📁', supervisionOnly: true },
   { key: 'contractors',   label: 'קבלנים',         icon: '👷', supervisionOnly: true },
   { key: 'budget',        label: 'תקציב פרויקט',   icon: '💰', supervisionOnly: true },
