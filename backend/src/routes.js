@@ -683,6 +683,17 @@ router.post('/alerts/send', authenticate, ah(async (req, res) => {
   res.json(data);
 }));
 
+// ── Diagnostics (superadmin) — which integrations are configured ──
+router.get('/diag', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  res.json({
+    db: process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite',
+    resend: !!process.env.RESEND_API_KEY,
+    cloudinary: !!process.env.CLOUDINARY_URL,
+    app_url: process.env.APP_URL || null,
+  });
+}));
+
 // ── Tutorials (public) ─────────────────────────────────────
 router.get('/tutorials', ah(async (req, res) => {
   res.json(await q('SELECT * FROM tutorials ORDER BY id DESC').all());
