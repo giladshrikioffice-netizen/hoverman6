@@ -111,6 +111,8 @@ export const api = {
 
   upload: (file_data, file_name) => req('POST', '/upload', { file_data, file_name }),
 
+  bgChecks: () => req('GET', '/bg-checks'),
+
   alerts: {
     send: () => req('POST', '/alerts/send', {}),
   },
@@ -138,5 +140,6 @@ export const api = {
     resetPassword: (id, password) => req('PUT', `/users/${id}/password`, { password }),
     del: id => req('DELETE', `/users/${id}`),
     invite: d => req('POST', '/invite', d),
+    setBgAccess: (id, allowed) => req('PUT', `/users/${id}/bg-access`, { allowed }),
   },
 };

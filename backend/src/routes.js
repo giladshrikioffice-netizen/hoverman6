@@ -378,7 +378,7 @@ router.put('/permissions/:unit_id/:module', authenticate, requireAdminOrCommitte
 // ── Users Management (superadmin) ─────────────────────────
 router.get('/users', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const users = await q('SELECT id,full_name,email,role,building_id,unit_id,is_demo FROM users ORDER BY building_id,role,full_name').all();
+  const users = await q('SELECT id,full_name,email,role,building_id,unit_id,is_demo,bg_access FROM users ORDER BY building_id,role,full_name').all();
   res.json(users);
 }));
 
@@ -690,6 +690,34 @@ router.post('/alerts/send', authenticate, ah(async (req, res) => {
   });
   const data = await r.json();
   res.json(data);
+}));
+
+// ── Background checks area (req #2) — curated due-diligence links ──
+const BG_LINKS = [
+  { title: 'רשם הקבלנים — בדיקת קבלן רשום', url: 'https://www.gov.il/he/service/contractor_registration_status', desc: 'בדיקת רישום וסיווג קבלן במרשם רשם הקבלנים' },
+  { title: 'רישוי חשמלאים מוסמכים', url: 'https://www.gov.il/he/service/electrician-license', desc: 'בדיקת רישיון והסמכת חשמלאי' },
+  { title: 'בטיחות בעבודה — מנהל עבודה מוסמך', url: 'https://www.gov.il/he/departments/topics/safety_at_work', desc: 'מידע על הסמכת מנהלי עבודה ובטיחות באתר' },
+  { title: 'המוסד לבטיחות ולגיהות', url: 'https://www.osh.org.il', desc: 'משאבים ובדיקות בטיחות' },
+  { title: 'רשות התאגידים — בדיקת חברה/עוסק', url: 'https://www.gov.il/he/departments/corporations_authority', desc: 'אימות פרטי חברה/עוסק מורשה' },
+  { title: 'אתר העירייה / רשות מקומית', url: 'https://www.gov.il/he/departments/local_authorities', desc: 'קישור לרשויות מקומיות לבירורים ובדיקות' },
+];
+
+async function bgAllowed(reqUser) {
+  if (reqUser.role === 'superadmin' || reqUser.role === 'admin') return true;
+  if (reqUser.role !== 'committee') return false;
+  const u = await q('SELECT bg_access FROM users WHERE id=?').get(reqUser.id);
+  return !!(u && u.bg_access);
+}
+
+router.get('/bg-checks', authenticate, ah(async (req, res) => {
+  const allowed = await bgAllowed(req.user);
+  res.json({ allowed, links: allowed ? BG_LINKS : [] });
+}));
+
+router.put('/users/:id/bg-access', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  await q('UPDATE users SET bg_access=? WHERE id=?').run(req.body.allowed ? 1 : 0, req.params.id);
+  res.json({ ok: true, id: Number(req.params.id), bg_access: req.body.allowed ? 1 : 0 });
 }));
 
 // ── Diagnostics (superadmin) — which integrations are configured ──

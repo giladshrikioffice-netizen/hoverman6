@@ -260,6 +260,8 @@ async function init() {
   // decision attachment (new req #4): reference document URL + name
   await addCol(`ALTER TABLE decisions ADD COLUMN doc_url TEXT`);
   await addCol(`ALTER TABLE decisions ADD COLUMN doc_name TEXT`);
+  // background-checks area access for committee members (new req #2) — superadmin grants
+  await addCol(`ALTER TABLE users ADD COLUMN bg_access INTEGER DEFAULT 0`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);

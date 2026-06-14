@@ -98,6 +98,16 @@ export default function UsersManager() {
     } catch(e) { setErr(e.message); }
   };
 
+  // ── Toggle background-checks access (committee) ───────────
+  const toggleBg = async (u) => {
+    const next = u.bg_access ? 0 : 1;
+    try {
+      await api.users.setBgAccess(u.id, !!next);
+      setUsers(p => p.map(x => x.id === u.id ? { ...x, bg_access: next } : x));
+      flash(next ? '🔓 ניתנה גישה לבדיקות רקע' : '🔒 הגישה לבדיקות רקע בוטלה');
+    } catch(e) { setErr(e.message); }
+  };
+
   // ── Send invite email ────────────────────────────────────
   const sendInvite = async () => {
     setSaving(true); setErr('');
@@ -175,6 +185,12 @@ export default function UsersManager() {
                     {u.email && u.role !== 'superadmin' && (
                       <button onClick={() => { setInviteUser(u); setErr(''); }}
                         className="bg-blue-900/40 hover:bg-blue-900/60 text-blue-400 px-2 py-1 rounded text-xs transition-colors">📧 הזמן</button>
+                    )}
+                    {u.role === 'committee' && (
+                      <button onClick={() => toggleBg(u)} title="גישה לאזור בדיקות רקע"
+                        className={`px-2 py-1 rounded text-xs transition-colors ${u.bg_access ? 'bg-emerald-900/40 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                        {u.bg_access ? '🔓 בדיקות רקע' : '🔒 בדיקות רקע'}
+                      </button>
                     )}
                     {u.role !== 'superadmin' && (
                       <button onClick={() => deleteUser(u.id, u.full_name)}

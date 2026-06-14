@@ -14,6 +14,7 @@ const NAV_ALL = [
   // Maintenance (all buildings)
   { key: 'maintenance',   label: 'תחזוקה שוטפת',   icon: '🔧', module: 'maintenance' },
   { key: 'professionals', label: 'ספק שירות',       icon: '⭐', module: 'professionals' },
+  { key: 'bgchecks',      label: 'בדיקות רקע',       icon: '🔎', staffOnly: true },
   // Residents / collection
   { key: 'payments',      label: 'גבייה',           icon: '💳', module: 'payments' },
   { key: 'complaints',    label: 'פניות דיירים',    icon: '📩', module: 'complaints' },
