@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { q, addDays } = require('./db');
 const { authenticate, requireAdmin, requireAdminOrCommittee } = require('./auth');
+const { uploadDataUrl } = require('./cloud');
 
 const router = express.Router();
 
@@ -200,6 +201,14 @@ router.put('/units/:id', authenticate, requireAdminOrCommittee, ah(async (req, r
   res.json(await q('SELECT * FROM units WHERE id=?').get(req.params.id));
 }));
 
+// ── File upload (auth) — uploads base64 to Cloudinary, returns a URL ──
+router.post('/upload', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const { file_data, file_name } = req.body;
+  if (!file_data) return res.status(400).json({ error: 'חסר קובץ' });
+  const { url, stored } = await uploadDataUrl(file_data, file_name);
+  res.json({ url, stored, file_name: file_name || '' });
+}));
+
 // ── Decisions ─────────────────────────────────────────────
 router.get('/decisions', authenticate, ah(async (req, res) => {
   const bid = getBid(req);
@@ -207,13 +216,13 @@ router.get('/decisions', authenticate, ah(async (req, res) => {
 }));
 router.post('/decisions', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const bid = getBid(req);
-  const { date, topic, approved_by, status } = req.body;
-  const r = await q('INSERT INTO decisions (building_id,date,topic,approved_by,status) VALUES (?,?,?,?,?)').run(bid, date, topic, approved_by, status||'ממתין');
+  const { date, topic, approved_by, status, doc_url, doc_name } = req.body;
+  const r = await q('INSERT INTO decisions (building_id,date,topic,approved_by,status,doc_url,doc_name) VALUES (?,?,?,?,?,?,?)').run(bid, date, topic, approved_by, status||'ממתין', doc_url||null, doc_name||null);
   res.json(await q('SELECT * FROM decisions WHERE id=?').get(r.lastInsertRowid));
 }));
 router.put('/decisions/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
-  const { date, topic, approved_by, status } = req.body;
-  await q('UPDATE decisions SET date=?,topic=?,approved_by=?,status=? WHERE id=?').run(date, topic, approved_by, status, req.params.id);
+  const { date, topic, approved_by, status, doc_url, doc_name } = req.body;
+  await q('UPDATE decisions SET date=?,topic=?,approved_by=?,status=?,doc_url=?,doc_name=? WHERE id=?').run(date, topic, approved_by, status, doc_url||null, doc_name||null, req.params.id);
   res.json(await q('SELECT * FROM decisions WHERE id=?').get(req.params.id));
 }));
 router.delete('/decisions/:id', authenticate, requireAdmin, ah(async (req, res) => {

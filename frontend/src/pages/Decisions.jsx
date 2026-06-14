@@ -17,10 +17,28 @@ export default function Decisions() {
 
   useEffect(() => { api.decisions.list().then(setRows).catch(e=>setErr(e.message)); }, []);
 
+  const [uploading, setUploading] = useState(false);
+
   const del = async id => {
     if (!confirm('למחוק החלטה זו?')) return;
     try { await api.decisions.del(id); setRows(p=>p.filter(x=>x.id!==id)); }
     catch(e) { setErr(e.message); }
+  };
+
+  const handleFile = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (f.size > 8*1024*1024) { setErr('הקובץ גדול מ-8MB'); return; }
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      setUploading(true); setErr('');
+      try {
+        const r = await api.upload(ev.target.result, f.name);
+        setForm(p=>({...p, doc_url:r.url, doc_name:f.name}));
+      } catch(e) { setErr(e.message); }
+      setUploading(false);
+    };
+    reader.readAsDataURL(f);
   };
 
   const save = async () => {
@@ -46,6 +64,7 @@ export default function Decisions() {
               <div className="flex-1">
                 <p className="font-semibold text-white flex items-center gap-2">{r.topic} <DemoBadge show={r.is_demo} /></p>
                 <p className="text-xs text-slate-500 mt-1">{r.date} | אישר: {r.approved_by||'—'}</p>
+                {r.doc_url && <a href={r.doc_url} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 text-xs mt-1 inline-block">📎 {r.doc_name||'מסמך מצורף'}</a>}
               </div>
               <div className="flex items-center gap-2">
                 <span className={`px-2 py-0.5 rounded-full text-xs border ${STATUS_COLOR[r.status]||''}`}>{r.status}</span>
@@ -76,9 +95,16 @@ export default function Decisions() {
                 {['ממתין','מאושר','נדחה'].map(s=><option key={s}>{s}</option>)}
               </select>
             </div>
+            <div className="mb-4">
+              <label className="block text-xs text-slate-400 mb-1">📎 מסמך אסמכתא (אופציונלי — חשבונית/קבלה, עד 8MB)</label>
+              <input type="file" onChange={handleFile}
+                className="w-full text-xs text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-700 file:text-slate-200 file:px-3 file:py-1.5" />
+              {uploading && <p className="text-amber-400 text-xs mt-1">מעלה...</p>}
+              {form.doc_name && !uploading && <p className="text-emerald-400 text-xs mt-1">✅ {form.doc_name}</p>}
+            </div>
             <div className="flex gap-2 justify-end">
               <button onClick={()=>setEditing(null)} className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 text-sm">ביטול</button>
-              <button onClick={save} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">שמירה</button>
+              <button onClick={save} disabled={uploading} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm">שמירה</button>
             </div>
           </div>
         </div>

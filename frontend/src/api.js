@@ -109,6 +109,8 @@ export const api = {
     create: d => req('POST', '/feedback', d),
   },
 
+  upload: (file_data, file_name) => req('POST', '/upload', { file_data, file_name }),
+
   alerts: {
     send: () => req('POST', '/alerts/send', {}),
   },

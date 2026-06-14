@@ -257,6 +257,9 @@ async function init() {
   await addCol(`ALTER TABLE payments ADD COLUMN period_label TEXT`);
   // budget track: project vs maintenance budget (new req #1)
   await addCol(`ALTER TABLE budget_items ADD COLUMN track TEXT DEFAULT 'project'`);
+  // decision attachment (new req #4): reference document URL + name
+  await addCol(`ALTER TABLE decisions ADD COLUMN doc_url TEXT`);
+  await addCol(`ALTER TABLE decisions ADD COLUMN doc_name TEXT`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);
