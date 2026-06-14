@@ -3,8 +3,12 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import DemoBadge, { demoTint } from '../components/DemoBadge';
 
-const EMPTY = { name: '', address: '', num_units: '', num_floors: '', budget: '', target_date: '' };
+const EMPTY = { name: '', address: '', num_units: '', num_floors: '', budget: '', target_date: '', type: 'supervision' };
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
+const TYPE_LABEL = {
+  supervision: { text: '📐 פרויקט / פיקוח', cls: 'bg-blue-600/20 text-blue-400 border-blue-600/40' },
+  maintenance: { text: '🔧 תחזוקה שוטפת', cls: 'bg-emerald-600/20 text-emerald-400 border-emerald-600/40' },
+};
 
 export default function AdminPanel({ onSelectBuilding }) {
   const { selectBuilding } = useAuth();
@@ -50,6 +54,9 @@ export default function AdminPanel({ onSelectBuilding }) {
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">{b.name} <DemoBadge show={b.is_demo} /></h3>
                 <p className="text-slate-400 text-xs mt-0.5">{b.address}</p>
+                <span className={`inline-block mt-1.5 border text-[11px] px-2 py-0.5 rounded-full ${(TYPE_LABEL[b.type]||TYPE_LABEL.supervision).cls}`}>
+                  {(TYPE_LABEL[b.type]||TYPE_LABEL.supervision).text}
+                </span>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => { setForm(b); setEditing(b.id); }} className="text-blue-400 hover:text-blue-300 text-xs">✏️</button>
@@ -74,6 +81,14 @@ export default function AdminPanel({ onSelectBuilding }) {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-4">{editing === 'new' ? 'בניין חדש' : 'עריכת בניין'}</h3>
+            <div className="mb-3">
+              <label className="block text-sm text-slate-400 mb-1">סיווג הבניין</label>
+              <select value={form.type||'supervision'} onChange={e=>setForm(p=>({...p,type:e.target.value}))}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="supervision">📐 פרויקט / פיקוח הנדסי</option>
+                <option value="maintenance">🔧 תחזוקה שוטפת</option>
+              </select>
+            </div>
             {[['name','שם הבניין'],['address','כתובת'],['num_units','מספר דירות'],['num_floors','מספר קומות'],['budget','תקציב (₪)'],['target_date','יעד סיום']].map(([k,l]) => (
               <div key={k} className="mb-3">
                 <label className="block text-sm text-slate-400 mb-1">{l}</label>

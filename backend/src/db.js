@@ -255,6 +255,8 @@ async function init() {
   // payments: type (monthly/yearly/one-time) + a free-text period label (req #11)
   await addCol(`ALTER TABLE payments ADD COLUMN payment_type TEXT DEFAULT 'חד-פעמי'`);
   await addCol(`ALTER TABLE payments ADD COLUMN period_label TEXT`);
+  // budget track: project vs maintenance budget (new req #1)
+  await addCol(`ALTER TABLE budget_items ADD COLUMN track TEXT DEFAULT 'project'`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);

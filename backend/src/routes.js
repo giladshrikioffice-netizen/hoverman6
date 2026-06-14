@@ -20,8 +20,8 @@ router.get('/buildings', authenticate, ah(async (req, res) => {
 
 router.post('/buildings', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const { name, address, num_units, num_floors, budget, target_date } = req.body;
-  const r = await q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date) VALUES (?,?,?,?,?,?)').run(name, address, num_units || 0, num_floors || 0, budget || 0, target_date);
+  const { name, address, num_units, num_floors, budget, target_date, type } = req.body;
+  const r = await q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)').run(name, address, num_units || 0, num_floors || 0, budget || 0, target_date, type || 'supervision');
   const bid = r.lastInsertRowid;
   const n = parseInt(num_units) || 0;
   for (let i = 1; i <= n; i++) {
@@ -104,13 +104,13 @@ router.get('/budget', authenticate, ah(async (req, res) => {
 }));
 router.post('/budget', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const bid = getBid(req);
-  const { category, planned_amount, paid_amount } = req.body;
-  const r = await q('INSERT INTO budget_items (building_id,category,planned_amount,paid_amount) VALUES (?,?,?,?)').run(bid, category, planned_amount||0, paid_amount||0);
+  const { category, planned_amount, paid_amount, track } = req.body;
+  const r = await q('INSERT INTO budget_items (building_id,category,planned_amount,paid_amount,track) VALUES (?,?,?,?,?)').run(bid, category, planned_amount||0, paid_amount||0, track||'project');
   res.json(await q('SELECT * FROM budget_items WHERE id=?').get(r.lastInsertRowid));
 }));
 router.put('/budget/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
-  const { category, planned_amount, paid_amount } = req.body;
-  await q('UPDATE budget_items SET category=?,planned_amount=?,paid_amount=? WHERE id=?').run(category, planned_amount, paid_amount, req.params.id);
+  const { category, planned_amount, paid_amount, track } = req.body;
+  await q('UPDATE budget_items SET category=?,planned_amount=?,paid_amount=?,track=? WHERE id=?').run(category, planned_amount, paid_amount, track||'project', req.params.id);
   res.json(await q('SELECT * FROM budget_items WHERE id=?').get(req.params.id));
 }));
 router.delete('/budget/:id', authenticate, requireAdmin, ah(async (req, res) => {

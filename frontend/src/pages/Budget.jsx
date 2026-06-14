@@ -3,8 +3,10 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
-const EMPTY = { category:'', planned_amount:'', paid_amount:'' };
+const EMPTY = { category:'', planned_amount:'', paid_amount:'', track:'project' };
 const pct = (a,b) => b ? Math.min(Math.round(a/b*100),100) : 0;
+const TRACKS = [['all','הכל'],['project','📐 ניהול פרויקט'],['maintenance','🔧 ניהול תחזוקה']];
+const TRACK_LABEL = { project:'📐 פרויקט', maintenance:'🔧 תחזוקה' };
 
 export default function Budget() {
   const { user } = useAuth();
@@ -13,9 +15,17 @@ export default function Budget() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [err, setErr] = useState('');
+  const [track, setTrack] = useState('all');
 
   const load = () => api.budget.get().then(setData).catch(e=>setErr(e.message));
   useEffect(() => { load(); }, []);
+
+  const items = data.items.filter(r => track==='all' || (r.track||'project')===track);
+  const totals = items.reduce((a,r)=>({
+    planned:a.planned+(r.planned_amount||0), paid:a.paid+(r.paid_amount||0),
+  }),{planned:0,paid:0});
+  totals.balance = totals.planned - totals.paid;
+  totals.project_total = data.totals.project_total;
 
   const save = async () => {
     try {
@@ -32,8 +42,17 @@ export default function Budget() {
       </div>
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
 
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {TRACKS.map(([k,l])=>(
+          <button key={k} onClick={()=>setTrack(k)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${track===k?'bg-blue-600 text-white border-blue-500':'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        {[['תקציב',fmt(data.totals.project_total)],['מתוכנן',fmt(data.totals.planned)],['שולם',fmt(data.totals.paid)],['יתרה',fmt(data.totals.balance)]].map(([l,v])=>(
+        {[['תקציב',fmt(totals.project_total)],['מתוכנן',fmt(totals.planned)],['שולם',fmt(totals.paid)],['יתרה',fmt(totals.balance)]].map(([l,v])=>(
           <div key={l} className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-center">
             <p className="text-xs text-slate-400">{l}</p>
             <p className="font-bold text-white text-sm mt-0.5">{v}</p>
@@ -44,14 +63,15 @@ export default function Budget() {
       <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-700">
-            <tr>{['סעיף','מתוכנן','שולם','יתרה','%',...(canEdit?['פעולות']:[])].map(h=>(
+            <tr>{['סעיף','מסלול','מתוכנן','שולם','יתרה','%',...(canEdit?['פעולות']:[])].map(h=>(
               <th key={h} className="px-4 py-3 text-right text-xs font-medium text-slate-400">{h}</th>
             ))}</tr>
           </thead>
           <tbody>
-            {data.items.map(r=>(
+            {items.map(r=>(
               <tr key={r.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                 <td className="px-4 py-2.5 font-medium text-white">{r.category}</td>
+                <td className="px-4 py-2.5 text-xs text-slate-400">{TRACK_LABEL[r.track||'project']}</td>
                 <td className="px-4 py-2.5 text-slate-300">{fmt(r.planned_amount)}</td>
                 <td className="px-4 py-2.5 text-green-400">{fmt(r.paid_amount)}</td>
                 <td className={`px-4 py-2.5 font-medium ${r.balance<0?'text-red-400':'text-orange-400'}`}>{fmt(r.balance)}</td>
@@ -72,11 +92,12 @@ export default function Budget() {
           </tbody>
           <tfoot className="border-t-2 border-slate-600">
             <tr>
-              <td className="px-4 py-2.5 font-semibold text-white">סה״כ</td>
-              <td className="px-4 py-2.5 font-semibold text-slate-300">{fmt(data.totals.planned)}</td>
-              <td className="px-4 py-2.5 font-semibold text-green-400">{fmt(data.totals.paid)}</td>
-              <td className="px-4 py-2.5 font-semibold text-orange-400">{fmt(data.totals.balance)}</td>
-              <td className="px-4 py-2.5 text-xs text-slate-500">{pct(data.totals.paid,data.totals.project_total)}% מהתקציב הכולל</td>
+              <td className="px-4 py-2.5 font-semibold text-white">סה״כ {track!=='all'?TRACK_LABEL[track]:''}</td>
+              <td />
+              <td className="px-4 py-2.5 font-semibold text-slate-300">{fmt(totals.planned)}</td>
+              <td className="px-4 py-2.5 font-semibold text-green-400">{fmt(totals.paid)}</td>
+              <td className="px-4 py-2.5 font-semibold text-orange-400">{fmt(totals.balance)}</td>
+              <td className="px-4 py-2.5 text-xs text-slate-500">{pct(totals.paid,totals.planned)}%</td>
               {canEdit && <td />}
             </tr>
           </tfoot>
@@ -87,6 +108,14 @@ export default function Budget() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-4">{editing==='new'?'סעיף חדש':'עריכה'}</h3>
+            <div className="mb-3">
+              <label className="block text-xs text-slate-400 mb-1">מסלול תקציב</label>
+              <select value={form.track||'project'} onChange={e=>setForm(p=>({...p,track:e.target.value}))}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="project">📐 ניהול פרויקט</option>
+                <option value="maintenance">🔧 ניהול תחזוקה</option>
+              </select>
+            </div>
             {[['category','קטגוריה'],['planned_amount','מתוכנן (₪)'],['paid_amount','שולם (₪)']].map(([k,l])=>(
               <div key={k} className="mb-3">
                 <label className="block text-xs text-slate-400 mb-1">{l}</label>
