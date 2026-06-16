@@ -83,6 +83,8 @@ export const api = {
     create: d => req('POST', '/complaints', { ...d, building_id: getBid() }),
     update: (id, d) => req('PUT', `/complaints/${id}`, d),
     del: id => req('DELETE', `/complaints/${id}`),
+    forward: (id, forwarded) => req('PUT', `/complaints/${id}/forward`, { forwarded }),
+    adminResponse: (id, d) => req('PUT', `/complaints/${id}/admin-response`, d),
   },
 
   maintenance: {

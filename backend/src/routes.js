@@ -260,6 +260,11 @@ router.get('/complaints', authenticate, ah(async (req, res) => {
     if (!req.user.unit_id) return res.json([]);
     return res.json(await q(cSelect + ' WHERE c.unit_id=? AND c.building_id=? ORDER BY c.created_at DESC').all(req.user.unit_id, bid));
   }
+  // The מפקח (superadmin) only sees complaints the committee forwarded to him.
+  if (req.user.role === 'superadmin') {
+    return res.json(await q(cSelect + ' WHERE c.building_id=? AND c.forwarded=1 ORDER BY c.forwarded_at DESC, c.created_at DESC').all(bid));
+  }
+  // Committee / building-admin see all complaints for the building.
   res.json(await q(cSelect + ' WHERE c.building_id=? ORDER BY c.created_at DESC').all(bid));
 }));
 router.post('/complaints', authenticate, ah(async (req, res) => {
@@ -273,6 +278,22 @@ router.post('/complaints', authenticate, ah(async (req, res) => {
 router.put('/complaints/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const { status } = req.body;
   await q('UPDATE complaints SET status=? WHERE id=?').run(status, req.params.id);
+  res.json(await q(cSelect + ' WHERE c.id=?').get(req.params.id));
+}));
+
+// Committee forwards a complaint to the מפקח (admin)
+router.put('/complaints/:id/forward', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const now = new Date().toISOString().slice(0,10);
+  const fwd = req.body.forwarded === false ? 0 : 1;
+  await q('UPDATE complaints SET forwarded=?,forwarded_at=? WHERE id=?').run(fwd, fwd ? now : null, req.params.id);
+  res.json(await q(cSelect + ' WHERE c.id=?').get(req.params.id));
+}));
+
+// The מפקח responds (initial status + optional final response)
+router.put('/complaints/:id/admin-response', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'מיועד למפקח בלבד' });
+  const { admin_status, admin_response } = req.body;
+  await q('UPDATE complaints SET admin_status=?,admin_response=? WHERE id=?').run(admin_status||'', admin_response||'', req.params.id);
   res.json(await q(cSelect + ' WHERE c.id=?').get(req.params.id));
 }));
 router.delete('/complaints/:id', authenticate, requireAdmin, ah(async (req, res) => {

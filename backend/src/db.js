@@ -279,6 +279,11 @@ async function init() {
   await addCol(`ALTER TABLE users ADD COLUMN areas TEXT DEFAULT 'both'`);
   // payments: which area a unit's payment belongs to (running maintenance vs project)
   await addCol(`ALTER TABLE payments ADD COLUMN area TEXT DEFAULT 'maintenance'`);
+  // complaints approval flow (structural reorg): committee forwards to admin (מפקח)
+  await addCol(`ALTER TABLE complaints ADD COLUMN forwarded INTEGER DEFAULT 0`);
+  await addCol(`ALTER TABLE complaints ADD COLUMN forwarded_at TEXT`);
+  await addCol(`ALTER TABLE complaints ADD COLUMN admin_status TEXT`);
+  await addCol(`ALTER TABLE complaints ADD COLUMN admin_response TEXT`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);
