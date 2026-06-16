@@ -55,7 +55,8 @@ function ProgressBar({ value, color = 'bg-blue-500' }) {
 }
 
 export default function Dashboard() {
-  const { building, isSupervision, user } = useAuth();
+  const { building, isSupervision, isMaintenance, user } = useAuth();
+  const openMonthly = () => window.dispatchEvent(new CustomEvent('navigate', { detail: 'monthly' }));
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
 
@@ -93,8 +94,12 @@ export default function Dashboard() {
       {isSupervision && (
         <>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">פיקוח הנדסי</span>
+            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">🔵 פיקוח הנדסי</span>
             <div className="flex-1 h-px bg-blue-800/40" />
+            <button onClick={openMonthly}
+              className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 text-blue-400 text-xs px-3 py-1 rounded-lg transition-colors whitespace-nowrap">
+              🗓️ דוח חודשי
+            </button>
           </div>
 
           {/* Supervision stats */}
@@ -145,8 +150,9 @@ export default function Dashboard() {
       )}
 
       {/* === MAINTENANCE SECTION === */}
+      {isMaintenance && (<>
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">תחזוקה שוטפת</span>
+        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">🟢 תחזוקה שוטפת</span>
         <div className="flex-1 h-px bg-emerald-800/40" />
       </div>
 
@@ -170,6 +176,7 @@ export default function Dashboard() {
           <p className="text-slate-500 text-xs mt-1">פניות דיירים הממתינות לטיפול</p>
         </div>
       </div>
+      </>)}
 
       {/* === COLLECTION SECTION (secondary) === */}
       <div className="flex items-center gap-2 mb-3">
