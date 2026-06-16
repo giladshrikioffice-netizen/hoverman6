@@ -55,6 +55,7 @@ export const api = {
 
   payments: {
     list: () => req('GET', bq('/payments')),
+    create: d => req('POST', '/payments', { ...d, building_id: getBid() }),
     update: (id, d) => req('PUT', `/payments/${id}`, d),
     demand: (id, to_email) => req('POST', `/payments/${id}/demand`, to_email ? { to_email } : {}),
   },

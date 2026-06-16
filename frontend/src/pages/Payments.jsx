@@ -6,8 +6,10 @@ import DemoBadge from '../components/DemoBadge';
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
 const STATUS_COLOR = { 'שולם במלואו':'bg-green-500/20 text-green-400 border-green-500/30', 'שולם חלקית':'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', 'לא שולם':'bg-red-500/20 text-red-400 border-red-500/30' };
 
+const AREA_LABEL = { maintenance: '🟢 גבייה שוטפת', project: '🔵 גבייה לפרויקט' };
+
 export default function Payments() {
-  const { user } = useAuth();
+  const { user, isCombined } = useAuth();
   const canEdit = ['superadmin','admin','committee'].includes(user?.role);
   const [rows, setRows] = useState([]);
   const [editing, setEditing] = useState(null);
@@ -16,12 +18,19 @@ export default function Payments() {
   const [msg, setMsg] = useState('');
   const [search, setSearch] = useState('');
   const [sending, setSending] = useState(null);
+  const [areaTab, setAreaTab] = useState('maintenance');
 
   useEffect(() => { api.payments.list().then(setRows).catch(e=>setErr(e.message)); }, []);
 
+  // unique units (for the "add collection" unit selector)
+  const units = Array.from(new Map(rows.map(r=>[r.unit_id,{id:r.unit_id,n:r.unit_number}])).values()).sort((a,b)=>a.n-b.n);
+
   const save = async () => {
-    try { const r = await api.payments.update(editing,form); setRows(p=>p.map(x=>x.id===editing?r:x)); setEditing(null); }
-    catch(e) { setErr(e.message); }
+    try {
+      if (editing === 'new') { const r = await api.payments.create(form); setRows(p=>[...p,r]); }
+      else { const r = await api.payments.update(editing,form); setRows(p=>p.map(x=>x.id===editing?r:x)); }
+      setEditing(null);
+    } catch(e) { setErr(e.message); }
   };
 
   const demand = async (id) => {
@@ -31,8 +40,11 @@ export default function Payments() {
     setSending(null);
   };
 
-  const filtered = rows.filter(r => !search || String(r.unit_number).includes(search) || (r.owner_name||'').includes(search));
-  const totals = rows.reduce((a,r)=>({ due:a.due+r.amount_due, paid:a.paid+r.amount_paid }),{due:0,paid:0});
+  const filtered = rows.filter(r =>
+    (!search || String(r.unit_number).includes(search) || (r.owner_name||'').includes(search)) &&
+    (!isCombined || (r.area||'maintenance') === areaTab)
+  );
+  const totals = filtered.reduce((a,r)=>({ due:a.due+r.amount_due, paid:a.paid+r.amount_paid }),{due:0,paid:0});
 
   if (user?.role === 'resident') return (
     <div className="max-w-sm">
@@ -54,11 +66,26 @@ export default function Payments() {
     <div className="max-w-5xl">
       <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
         <h2 className="text-xl font-bold text-white">💳 גבייה מדיירים</h2>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="חיפוש דירה/שם..."
-          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none w-44" />
+        <div className="flex gap-2 items-center">
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="חיפוש דירה/שם..."
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none w-40" />
+          {canEdit && <button onClick={()=>{ setForm({area: isCombined?areaTab:'maintenance', amount_due:'', amount_paid:'', payment_type:'חודשי'}); setEditing('new'); }}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm whitespace-nowrap">+ הוסף גבייה</button>}
+        </div>
       </div>
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
       {msg && <div className="bg-emerald-900/30 border border-emerald-700 text-emerald-400 px-3 py-2 rounded mb-3 text-sm">{msg}</div>}
+
+      {isCombined && (
+        <div className="flex gap-2 mb-4">
+          {['maintenance','project'].map(a=>(
+            <button key={a} onClick={()=>setAreaTab(a)}
+              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${areaTab===a?'bg-blue-600 text-white border-blue-500':'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'}`}>
+              {AREA_LABEL[a]}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[['סה״כ לגביה',fmt(totals.due),'blue'],['שולם',fmt(totals.paid),'green'],['יתרת חוב',fmt(totals.due-totals.paid),'red']].map(([l,v,c])=>(
@@ -88,7 +115,7 @@ export default function Payments() {
                 <td className={`px-3 py-2 font-medium ${r.balance>0?'text-red-400':'text-green-400'}`}>{fmt(r.balance)}</td>
                 <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs border ${STATUS_COLOR[r.status]||''}`}>{r.status}</span></td>
                 {canEdit && <td className="px-3 py-2 whitespace-nowrap">
-                  <button onClick={()=>{ setForm({amount_due:r.amount_due,amount_paid:r.amount_paid,due_date:r.due_date||'',note:r.note||'',payment_type:r.payment_type||'חד-פעמי',period_label:r.period_label||''}); setEditing(r.id); }} className="text-blue-400 hover:text-blue-300 text-xs">✏️</button>
+                  <button onClick={()=>{ setForm({amount_due:r.amount_due,amount_paid:r.amount_paid,due_date:r.due_date||'',note:r.note||'',payment_type:r.payment_type||'חד-פעמי',period_label:r.period_label||'',area:r.area||'maintenance'}); setEditing(r.id); }} className="text-blue-400 hover:text-blue-300 text-xs">✏️</button>
                   {r.balance>0 && <button onClick={()=>demand(r.id)} disabled={sending===r.id} title="שלח דרישת תשלום במייל לדייר"
                     className="text-amber-400 hover:text-amber-300 text-xs mr-2 disabled:opacity-50">{sending===r.id?'שולח...':'📧 דרישה'}</button>}
                 </td>}
@@ -101,7 +128,25 @@ export default function Payments() {
       {editing !== null && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">עריכת תשלום</h3>
+            <h3 className="text-lg font-bold text-white mb-4">{editing==='new'?'הוספת גבייה':'עריכת תשלום'}</h3>
+            {editing==='new' && (
+              <div className="mb-3">
+                <label className="block text-xs text-slate-400 mb-1">דירה</label>
+                <select value={form.unit_id||''} onChange={e=>setForm(p=>({...p,unit_id:Number(e.target.value)}))}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— בחר דירה —</option>
+                  {units.map(u=><option key={u.id} value={u.id}>דירה {u.n}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="mb-3">
+              <label className="block text-xs text-slate-400 mb-1">סוג הגבייה</label>
+              <select value={form.area||'maintenance'} onChange={e=>setForm(p=>({...p,area:e.target.value}))}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="maintenance">🟢 גבייה שוטפת</option>
+                <option value="project">🔵 גבייה לפרויקט</option>
+              </select>
+            </div>
             {[['amount_due','לתשלום (₪)'],['amount_paid','שולם (₪)'],['note','הערה']].map(([k,l])=>(
               <div key={k} className="mb-3">
                 <label className="block text-xs text-slate-400 mb-1">{l}</label>

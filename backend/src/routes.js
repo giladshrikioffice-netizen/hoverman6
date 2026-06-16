@@ -135,10 +135,18 @@ router.get('/payments', authenticate, ah(async (req, res) => {
   }
   res.json(await q(paymentSelect + ' WHERE p.building_id=? ORDER BY u.unit_number').all(bid));
 }));
+router.post('/payments', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const bid = getBid(req);
+  const { unit_id, area, amount_due, amount_paid, due_date, note, payment_type, period_label } = req.body;
+  if (!unit_id) return res.status(400).json({ error: 'חסרה דירה' });
+  const r = await q('INSERT INTO payments (unit_id,building_id,amount_due,amount_paid,due_date,note,payment_type,period_label,area) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(unit_id, bid, amount_due||0, amount_paid||0, due_date||null, note||'', payment_type||'חד-פעמי', period_label||'', area||'maintenance');
+  res.json(await q(paymentSelect + ' WHERE p.id=?').get(r.lastInsertRowid));
+}));
 router.put('/payments/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
-  const { amount_due, amount_paid, due_date, note, payment_type, period_label } = req.body;
-  await q('UPDATE payments SET amount_due=?,amount_paid=?,due_date=?,note=?,payment_type=?,period_label=? WHERE id=?')
-    .run(amount_due, amount_paid, due_date, note, payment_type||'חד-פעמי', period_label||'', req.params.id);
+  const { amount_due, amount_paid, due_date, note, payment_type, period_label, area } = req.body;
+  await q('UPDATE payments SET amount_due=?,amount_paid=?,due_date=?,note=?,payment_type=?,period_label=?,area=? WHERE id=?')
+    .run(amount_due, amount_paid, due_date, note, payment_type||'חד-פעמי', period_label||'', area||'maintenance', req.params.id);
   res.json(await q(paymentSelect + ' WHERE p.id=?').get(req.params.id));
 }));
 
