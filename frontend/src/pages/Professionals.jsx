@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext';
 import DemoBadge, { demoTint } from '../components/DemoBadge';
 
 const EMPTY = { name: '', trade: '', phone: '', email: '', rating: 5, review: '', last_cost: '', last_service_date: '', service_years: '' };
+const CATEGORIES = ['חשמל','אינסטלציה','מעליות','גינון','ניקיון','מיזוג אוויר','איטום','צבע','נגרות','מנעולן','דברתן','כיבוי אש','אלומיניום','גגות','אחר'];
 
 function Stars({ rating, onChange }) {
   return (
@@ -43,12 +44,16 @@ export default function Professionals() {
     setRows(p => p.filter(x => x.id !== id));
   };
 
-  const filtered = rows.filter(r => !search || r.name.includes(search) || (r.trade||'').includes(search));
+  const [cat, setCat] = useState('');
+  const filtered = rows.filter(r =>
+    (!search || r.name.includes(search) || (r.trade||'').includes(search)) &&
+    (!cat || (r.trade||'') === cat)
+  );
 
   return (
     <div className="max-w-4xl">
       <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-        <h2 className="text-xl font-bold text-white">⭐ אנשי מקצוע</h2>
+        <h2 className="text-xl font-bold text-white">⭐ ספקי שירות</h2>
         <div className="flex gap-2">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="חיפוש..."
             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36" />
@@ -62,6 +67,15 @@ export default function Professionals() {
       </div>
 
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-3 text-sm">{err}</div>}
+
+      {/* Category filter */}
+      <div className="flex gap-1.5 flex-wrap mb-4">
+        <button onClick={()=>setCat('')} className={`px-2.5 py-1 rounded-full text-xs border ${!cat?'bg-blue-600 text-white border-blue-500':'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'}`}>הכל</button>
+        {CATEGORIES.map(c=>(
+          <button key={c} onClick={()=>setCat(c===cat?'':c)} className={`px-2.5 py-1 rounded-full text-xs border ${cat===c?'bg-blue-600 text-white border-blue-500':'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'}`}>{c}</button>
+        ))}
+      </div>
+      <datalist id="trades">{CATEGORIES.map(c=><option key={c} value={c} />)}</datalist>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map(r => (
@@ -112,10 +126,10 @@ export default function Professionals() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-4">{editing === 'new' ? 'איש מקצוע חדש' : 'עריכה'}</h3>
-            {[['name','שם'],['trade','תחום'],['phone','📞 טלפון'],['email','✉️ אימייל','email'],['service_years','🗓️ כמה שנים נותן שירות (למשל "3 שנים")'],['last_cost','עלות טיפול אחרון (₪)'],['last_service_date','תאריך טיפול אחרון','date']].map(([k,l,t]) => (
+            {[['name','שם'],['trade','תחום / קטגוריה'],['phone','📞 טלפון'],['email','✉️ אימייל','email'],['service_years','🗓️ כמה שנים נותן שירות (למשל "3 שנים")'],['last_cost','עלות טיפול אחרון (₪)'],['last_service_date','תאריך טיפול אחרון','date']].map(([k,l,t]) => (
               <div key={k} className="mb-3">
                 <label className="block text-xs text-slate-400 mb-1">{l}</label>
-                <input type={t||'text'} value={form[k]||''} onChange={e => setForm(p=>({...p,[k]:e.target.value}))}
+                <input type={t||'text'} list={k==='trade'?'trades':undefined} value={form[k]||''} onChange={e => setForm(p=>({...p,[k]:e.target.value}))}
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             ))}

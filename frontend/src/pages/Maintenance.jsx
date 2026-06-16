@@ -64,7 +64,7 @@ export default function Maintenance() {
   return (
     <div className="max-w-4xl">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-white">🔧 תחזוקה שוטפת</h2>
+        <h2 className="text-xl font-bold text-white">🔧 קבלני תחזוקה שוטפת</h2>
         {canEdit && (
           <div className="flex gap-2">
             <button onClick={() => { setForm(EMPTY); setEditing('new'); }}
