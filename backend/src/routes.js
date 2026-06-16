@@ -183,7 +183,7 @@ router.post('/payments/:id/demand', authenticate, requireAdminOrCommittee, ah(as
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'GS.pro <onboarding@resend.dev>', to: [toEmail], subject: `דרישת תשלום — דירה ${pay.unit_number} | ${building?.name || 'GS.pro'}`, html }),
+    body: JSON.stringify({ from: process.env.MAIL_FROM || 'GS.pro <onboarding@resend.dev>', to: [toEmail], subject: `דרישת תשלום — דירה ${pay.unit_number} | ${building?.name || 'GS.pro'}`, html }),
   });
   const data = await r.json();
   if (!r.ok) return res.status(500).json({ error: data.message || 'שגיאה בשליחה' });
@@ -412,20 +412,20 @@ router.put('/permissions/:unit_id/:module', authenticate, requireAdminOrCommitte
 // ── Users Management (superadmin) ─────────────────────────
 router.get('/users', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const users = await q('SELECT id,full_name,email,role,building_id,unit_id,is_demo,bg_access FROM users ORDER BY building_id,role,full_name').all();
+  const users = await q('SELECT id,full_name,email,role,building_id,unit_id,is_demo,bg_access,areas FROM users ORDER BY building_id,role,full_name').all();
   res.json(users);
 }));
 
 router.post('/users', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const { full_name, email, password, role, building_id, unit_id } = req.body;
+  const { full_name, email, password, role, building_id, unit_id, areas } = req.body;
   if (!full_name || !email || !password || !role) return res.status(400).json({ error: 'חסרים שדות חובה' });
   const existing = await q('SELECT id FROM users WHERE email=?').get(email.toLowerCase().trim());
   if (existing) return res.status(400).json({ error: 'אימייל כבר קיים' });
   const hashed = bcrypt.hashSync(password, 10);
-  const r = await q('INSERT INTO users (full_name,email,password,role,building_id,unit_id) VALUES (?,?,?,?,?,?)')
-    .run(full_name, email.toLowerCase().trim(), hashed, role, building_id || null, unit_id || null);
-  res.json(await q('SELECT id,full_name,email,role,building_id,unit_id FROM users WHERE id=?').get(r.lastInsertRowid));
+  const r = await q('INSERT INTO users (full_name,email,password,role,building_id,unit_id,areas) VALUES (?,?,?,?,?,?,?)')
+    .run(full_name, email.toLowerCase().trim(), hashed, role, building_id || null, unit_id || null, areas || 'both');
+  res.json(await q('SELECT id,full_name,email,role,building_id,unit_id,areas FROM users WHERE id=?').get(r.lastInsertRowid));
 }));
 
 router.put('/users/:id/password', authenticate, ah(async (req, res) => {
@@ -439,13 +439,13 @@ router.put('/users/:id/password', authenticate, ah(async (req, res) => {
 
 router.put('/users/:id', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const { full_name, email, building_id, unit_id, role } = req.body;
+  const { full_name, email, building_id, unit_id, role, areas } = req.body;
   if (!full_name || !email) return res.status(400).json({ error: 'שם ואימייל הם חובה' });
   const existing = await q('SELECT id FROM users WHERE email=? AND id!=?').get(email.toLowerCase().trim(), req.params.id);
   if (existing) return res.status(400).json({ error: 'אימייל כבר קיים אצל משתמש אחר' });
-  await q('UPDATE users SET full_name=?,email=?,building_id=?,unit_id=?,role=? WHERE id=?')
-    .run(full_name, email.toLowerCase().trim(), building_id || null, unit_id || null, role, req.params.id);
-  res.json(await q('SELECT id,full_name,email,role,building_id,unit_id FROM users WHERE id=?').get(req.params.id));
+  await q('UPDATE users SET full_name=?,email=?,building_id=?,unit_id=?,role=?,areas=? WHERE id=?')
+    .run(full_name, email.toLowerCase().trim(), building_id || null, unit_id || null, role, areas || 'both', req.params.id);
+  res.json(await q('SELECT id,full_name,email,role,building_id,unit_id,areas FROM users WHERE id=?').get(req.params.id));
 }));
 
 router.delete('/users/:id', authenticate, ah(async (req, res) => {
@@ -513,7 +513,7 @@ router.post('/invite', authenticate, ah(async (req, res) => {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'GS.pro <onboarding@resend.dev>',
+      from: process.env.MAIL_FROM || 'GS.pro <onboarding@resend.dev>',
       to: [to_email],
       subject: `הזמנה למערכת GS.pro — ${building_name || 'הבניין שלך'}`,
       html,
@@ -692,24 +692,28 @@ router.post('/cron/alerts', ah(async (req, res) => {
 
     for (const cm of committee) {
       try {
-        await fetch('https://api.resend.com/emails', {
+        const resp = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from: 'GS.pro <onboarding@resend.dev>',
+            from: process.env.MAIL_FROM || 'GS.pro <onboarding@resend.dev>',
             to: [cm.email],
             subject: `⚠️ התראות GS.pro — ${b.name} | ${today}`,
             html: bodyHtml,
           }),
         });
-        results.push({ building: b.name, to: cm.email, ok: true });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok) results.push({ building: b.name, to: cm.email, ok: true });
+        else results.push({ building: b.name, to: cm.email, ok: false, err: data.message || `HTTP ${resp.status}` });
       } catch(e) {
         results.push({ building: b.name, to: cm.email, ok: false, err: e.message });
       }
     }
   }
 
-  res.json({ ok: true, sent: results.length, results });
+  const okCount = results.filter(r => r.ok).length;
+  const failed = results.filter(r => !r.ok);
+  res.json({ ok: true, sent: okCount, failed: failed.length, results });
 }));
 
 // ── Manual alert trigger (superadmin from dashboard) ──────

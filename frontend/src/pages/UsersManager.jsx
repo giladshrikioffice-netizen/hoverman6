@@ -13,7 +13,8 @@ const ROLE_BADGE = {
   resident:   'bg-slate-600/20 text-slate-400 border-slate-600/40',
 };
 const ROLE_LABEL = { superadmin: 'מנהל מערכת', committee: 'ועד בית', resident: 'דייר' };
-const EMPTY_FORM = { full_name: '', email: '', password: '', role: 'resident', building_id: '', unit_id: '' };
+const EMPTY_FORM = { full_name: '', email: '', password: '', role: 'resident', building_id: '', unit_id: '', areas: 'both' };
+const AREA_LABEL = { maintenance: '🟢 תחזוקה', supervision: '🔵 פיקוח', both: '🔵🟢 שניהם' };
 
 export default function UsersManager() {
   const [users, setUsers]       = useState([]);
@@ -68,6 +69,7 @@ export default function UsersManager() {
         role: editUser.role,
         building_id: editUser.building_id || null,
         unit_id: editUser.unit_id || null,
+        areas: editUser.areas || 'both',
       });
       setUsers(p => p.map(x => x.id === u.id ? u : x));
       setEditUser(null);
@@ -175,7 +177,10 @@ export default function UsersManager() {
                     {ROLE_LABEL[u.role] || u.role}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-400 text-xs">{buildingName(u.building_id)}</td>
+                <td className="px-4 py-3 text-slate-400 text-xs">
+                  {buildingName(u.building_id)}
+                  {u.role !== 'superadmin' && <span className="block text-[11px] text-slate-500 mt-0.5">{AREA_LABEL[u.areas||'both']}</span>}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5 flex-wrap">
                     <button onClick={() => { setEditUser({...u}); setErr(''); }}
@@ -315,6 +320,16 @@ function FormFields({ form, setForm, buildings, showPassword }) {
           <option value="">— ללא בניין —</option>
           {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
+      </div>
+      <div className="mb-4">
+        <label className="block text-xs text-slate-400 mb-1">אזור גישה</label>
+        <select value={form.areas||'both'} onChange={e => set('areas', e.target.value)}
+          className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="maintenance">🟢 תחזוקה שוטפת בלבד</option>
+          <option value="supervision">🔵 פיקוח הנדסי בלבד</option>
+          <option value="both">🔵🟢 שניהם</option>
+        </select>
+        <p className="text-[11px] text-slate-500 mt-1">לאיזה אזור/ים יש למשתמש גישה בבניין שלו</p>
       </div>
     </>
   );

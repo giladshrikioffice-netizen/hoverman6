@@ -6,8 +6,9 @@ import DemoBadge, { demoTint } from '../components/DemoBadge';
 const EMPTY = { name: '', address: '', num_units: '', num_floors: '', budget: '', target_date: '', type: 'supervision' };
 const fmt = n => '₪' + Number(n||0).toLocaleString('he-IL');
 const TYPE_LABEL = {
-  supervision: { text: '📐 פרויקט / פיקוח', cls: 'bg-blue-600/20 text-blue-400 border-blue-600/40' },
-  maintenance: { text: '🔧 תחזוקה שוטפת', cls: 'bg-emerald-600/20 text-emerald-400 border-emerald-600/40' },
+  supervision: { text: '🔵 פיקוח הנדסי', cls: 'bg-blue-600/20 text-blue-400 border-blue-600/40' },
+  maintenance: { text: '🟢 תחזוקה שוטפת', cls: 'bg-emerald-600/20 text-emerald-400 border-emerald-600/40' },
+  both:        { text: '🔵🟢 פיקוח + תחזוקה', cls: 'bg-purple-600/20 text-purple-400 border-purple-600/40' },
 };
 
 export default function AdminPanel({ onSelectBuilding }) {
@@ -85,8 +86,9 @@ export default function AdminPanel({ onSelectBuilding }) {
               <label className="block text-sm text-slate-400 mb-1">סיווג הבניין</label>
               <select value={form.type||'supervision'} onChange={e=>setForm(p=>({...p,type:e.target.value}))}
                 className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="supervision">📐 פרויקט / פיקוח הנדסי</option>
-                <option value="maintenance">🔧 תחזוקה שוטפת</option>
+                <option value="supervision">🔵 פיקוח הנדסי בלבד</option>
+                <option value="maintenance">🟢 תחזוקה שוטפת בלבד</option>
+                <option value="both">🔵🟢 פיקוח + תחזוקה (שניהם)</option>
               </select>
             </div>
             {[['name','שם הבניין'],['address','כתובת'],['num_units','מספר דירות'],['num_floors','מספר קומות'],['budget','תקציב (₪)'],['target_date','יעד סיום']].map(([k,l]) => (

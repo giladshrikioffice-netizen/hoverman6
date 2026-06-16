@@ -275,6 +275,10 @@ async function init() {
   await addCol(`ALTER TABLE decisions ADD COLUMN doc_name TEXT`);
   // background-checks area access for committee members (new req #2) — superadmin grants
   await addCol(`ALTER TABLE users ADD COLUMN bg_access INTEGER DEFAULT 0`);
+  // area assignment: 'maintenance' | 'supervision' | 'both' (structural reorg)
+  await addCol(`ALTER TABLE users ADD COLUMN areas TEXT DEFAULT 'both'`);
+  // payments: which area a unit's payment belongs to (running maintenance vs project)
+  await addCol(`ALTER TABLE payments ADD COLUMN area TEXT DEFAULT 'maintenance'`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);

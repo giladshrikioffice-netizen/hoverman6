@@ -59,15 +59,33 @@ export function AuthProvider({ children }) {
     return permissions[module] !== 0;
   };
 
-  // Check if building has supervision features
-  const isSupervision = building?.type === 'supervision' || !building?.type;
+  // ── Area model: a building can be supervision-only, maintenance-only, or both ──
+  const t = building?.type;
+  const buildingHasSupervision = t === 'supervision' || t === 'both' || !t; // default: supervision
+  const buildingHasMaintenance = t === 'maintenance' || t === 'both';
+  const isStaff = ['superadmin', 'admin'].includes(user?.role);
+  const userAreas = user?.areas || 'both'; // 'maintenance' | 'supervision' | 'both'
+  const userInArea = area => isStaff || userAreas === 'both' || userAreas === area;
+
+  // Can the current user see a given area in the current building?
+  const canSeeArea = area => {
+    if (area === 'supervision') return buildingHasSupervision && userInArea('supervision');
+    if (area === 'maintenance') return buildingHasMaintenance && userInArea('maintenance');
+    return true;
+  };
+
+  // Back-compat: many modules still ask isSupervision
+  const isSupervision = canSeeArea('supervision');
+  const isMaintenance = canSeeArea('maintenance');
+  const isCombined = buildingHasSupervision && buildingHasMaintenance;
 
   return (
     <Ctx.Provider value={{
       user, building, setBuilding, selectBuilding,
       permissions, setPermissions,
       login, logout, loading,
-      hasAccess, isSupervision,
+      hasAccess, isSupervision, isMaintenance, isCombined,
+      canSeeArea, buildingHasSupervision, buildingHasMaintenance, userAreas, isStaff,
     }}>
       {children}
     </Ctx.Provider>
