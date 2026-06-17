@@ -23,6 +23,8 @@ import Documents from './pages/Documents';
 import MonthlyReport from './pages/MonthlyReport';
 import BackgroundChecks from './pages/BackgroundChecks';
 import ReportsModule from './pages/ReportsModule';
+import OnboardingPublic from './pages/OnboardingPublic';
+import OnboardingAdmin from './pages/OnboardingAdmin';
 import { api } from './api';
 import './index.css';
 
@@ -39,6 +41,7 @@ const PAGES = {
   monthly: MonthlyReport,
   bgchecks: BackgroundChecks,
   reports: ReportsModule,
+  onboarding: OnboardingAdmin,
 };
 
 function AppInner() {
@@ -100,5 +103,8 @@ function AppInner() {
 }
 
 export default function App() {
+  // Public onboarding form link (?form=TOKEN) — rendered without login or AuthProvider.
+  const formToken = new URLSearchParams(window.location.search).get('form');
+  if (formToken) return <OnboardingPublic token={formToken} />;
   return <AuthProvider><AppInner /></AuthProvider>;
 }

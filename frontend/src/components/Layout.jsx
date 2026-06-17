@@ -84,6 +84,7 @@ export default function Layout({ page, setPage, children }) {
               <>
                 <li><button onClick={() => go('admin')} className={linkCls('admin')}><span>ניהול מערכת</span><span className="text-base">🏢</span></button></li>
                 <li><button onClick={() => go('users')} className={linkCls('users')}><span>ניהול משתמשים</span><span className="text-base">👥</span></button></li>
+                <li><button onClick={() => go('onboarding')} className={linkCls('onboarding')}><span>טפסי קליטה</span><span className="text-base">📨</span></button></li>
               </>
             )}
 

@@ -226,6 +226,20 @@ function buildSchema() {
       UNIQUE(building_id, item_key)
     );
 
+    CREATE TABLE IF NOT EXISTS onboarding_forms (
+      id ${PK},
+      token TEXT UNIQUE NOT NULL,
+      form_type TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      data TEXT,
+      sent_to TEXT,
+      created_by TEXT,
+      building_id INTEGER REFERENCES buildings(id),
+      created_at ${TS} DEFAULT ${NOW},
+      submitted_at TEXT,
+      approved_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS monthly_reports (
       id ${PK},
       building_id INTEGER NOT NULL REFERENCES buildings(id),
@@ -256,6 +270,8 @@ async function init() {
     await addCol(`ALTER TABLE professionals ADD COLUMN email TEXT`);
     await addCol(`ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'committee'`);
   }
+  // building type (maintenance/supervision/both) — safety for older DBs missing it
+  await addCol(`ALTER TABLE buildings ADD COLUMN type TEXT DEFAULT 'supervision'`);
   // is_demo flag — marks data seeded by the system (not entered by the user) so the UI can highlight it.
   await addCol(`ALTER TABLE buildings ADD COLUMN is_demo INTEGER DEFAULT 0`);
   await addCol(`ALTER TABLE users ADD COLUMN is_demo INTEGER DEFAULT 0`);

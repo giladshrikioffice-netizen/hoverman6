@@ -116,6 +116,16 @@ export const api = {
 
   bgChecks: () => req('GET', '/bg-checks'),
 
+  onboarding: {
+    create: form_type => req('POST', '/onboarding', { form_type }),
+    list: () => req('GET', '/onboarding'),
+    publicGet: token => req('GET', `/onboarding/public/${token}`),
+    publicSubmit: (token, data) => req('PUT', `/onboarding/public/${token}`, { data }),
+    send: (id, to_email) => req('POST', `/onboarding/${id}/send`, { to_email }),
+    approve: id => req('POST', `/onboarding/${id}/approve`, {}),
+    del: id => req('DELETE', `/onboarding/${id}`),
+  },
+
   monthlyReports: {
     list: () => req('GET', bq('/monthly-reports')),
     create: d => req('POST', '/monthly-reports', { ...d, building_id: getBid() }),

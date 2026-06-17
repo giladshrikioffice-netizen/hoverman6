@@ -342,6 +342,160 @@ router.delete('/monthly-reports/:id', authenticate, requireAdminOrCommittee, ah(
   res.json({ ok: true });
 }));
 
+// ── Onboarding forms (client self-service intake → new building) ──
+const APP_URL = () => process.env.APP_URL || 'https://gspro-app.vercel.app';
+
+// Build a new building (and related records) from a submitted form's data.
+async function buildFromForm(form) {
+  const d = form.data ? JSON.parse(form.data) : {};
+  const type = form.form_type === 'maintenance' ? 'maintenance' : 'supervision';
+  const name = d.address || (type === 'maintenance' ? 'בניין תחזוקה' : 'פרויקט פיקוח');
+  const numUnits = parseInt(d.num_units) || 0;
+  const budgetTotal = type === 'supervision' ? (parseFloat(d.budget?.total) || 0) : 0;
+  const target = type === 'supervision' ? (d.budget?.target_date || null) : null;
+
+  const b = await q('INSERT INTO buildings (name,address,num_units,num_floors,budget,target_date,type) VALUES (?,?,?,?,?,?,?)')
+    .run(name, d.address || '', numUnits, parseInt(d.num_floors) || 0, budgetTotal, target, type);
+  const bid = b.lastInsertRowid;
+
+  for (let i = 1; i <= numUnits; i++)
+    await q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid, i, Math.ceil(i / 4));
+
+  // Contractors (both form types may include a dynamic list)
+  for (const c of (d.contractors || [])) {
+    if (!c || !c.name) continue;
+    await q('INSERT INTO contractors (building_id,name,trade,phone,status) VALUES (?,?,?,?,?)').run(bid, c.name, c.trade || '', c.phone || '', 'פעיל');
+  }
+
+  if (type === 'maintenance') {
+    // Maintenance systems → maintenance items
+    const today = new Date().toISOString().slice(0, 10);
+    for (const sys of (d.systems || [])) {
+      await q('INSERT INTO maintenance_items (building_id,name,frequency_days,last_check,next_check,status) VALUES (?,?,?,?,?,?)')
+        .run(bid, sys, 365, today, addDays(today, 365), 'תקין');
+    }
+    if (d.systems_other) await q('INSERT INTO maintenance_items (building_id,name,frequency_days,status) VALUES (?,?,?,?)').run(bid, d.systems_other, 365, 'תקין');
+    // Monthly running collection per unit
+    const monthly = parseFloat(d.collection?.monthly_per_unit) || 0;
+    if (monthly > 0) {
+      const units = await q('SELECT id FROM units WHERE building_id=?').all(bid);
+      for (const u of units)
+        await q('INSERT INTO payments (unit_id,building_id,amount_due,amount_paid,payment_type,area) VALUES (?,?,?,?,?,?)').run(u.id, bid, monthly, 0, 'חודשי', 'maintenance');
+    }
+  } else {
+    // Supervision: project budget total + paid
+    const paid = parseFloat(d.budget?.paid) || 0;
+    await q('INSERT INTO budget_items (building_id,category,planned_amount,paid_amount,track) VALUES (?,?,?,?,?)')
+      .run(bid, 'תקציב כולל מאושר', budgetTotal, paid, 'project');
+  }
+
+  // Create a committee contact user if an email was provided (best-effort)
+  const contact = type === 'maintenance' ? d.contact : (d.reps && d.reps[0]);
+  if (contact && contact.email) {
+    try {
+      const exists = await q('SELECT id FROM users WHERE email=?').get(contact.email.toLowerCase().trim());
+      if (!exists) {
+        await q('INSERT INTO users (full_name,email,password,role,building_id,areas) VALUES (?,?,?,?,?,?)')
+          .run(contact.name || 'נציג ועד', contact.email.toLowerCase().trim(), bcrypt.hashSync('123456', 10), 'committee', bid, type === 'maintenance' ? 'maintenance' : 'supervision');
+      }
+    } catch { /* ignore */ }
+  }
+
+  return bid;
+}
+
+// Admin: create a new form (generates a unique link)
+router.post('/onboarding', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const { form_type } = req.body;
+  if (!['maintenance', 'supervision'].includes(form_type)) return res.status(400).json({ error: 'סוג טופס לא תקין' });
+  const token = (global.crypto || require('crypto')).randomUUID();
+  const r = await q('INSERT INTO onboarding_forms (token,form_type,status,created_by) VALUES (?,?,?,?)').run(token, form_type, 'pending', req.user.full_name);
+  res.json({ id: r.lastInsertRowid, token, form_type, link: `${APP_URL()}/?form=${token}` });
+}));
+
+// Admin: list forms
+router.get('/onboarding', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const rows = await q('SELECT * FROM onboarding_forms ORDER BY id DESC').all();
+  res.json(rows.map(r => ({ ...r, data: r.data ? JSON.parse(r.data) : null, link: `${APP_URL()}/?form=${r.token}` })));
+}));
+
+// PUBLIC: client opens the form (no login)
+router.get('/onboarding/public/:token', ah(async (req, res) => {
+  const f = await q('SELECT id,form_type,status FROM onboarding_forms WHERE token=?').get(req.params.token);
+  if (!f) return res.status(404).json({ error: 'הטופס לא נמצא' });
+  res.json(f);
+}));
+
+// PUBLIC: client submits the form (no login)
+router.put('/onboarding/public/:token', ah(async (req, res) => {
+  const f = await q('SELECT * FROM onboarding_forms WHERE token=?').get(req.params.token);
+  if (!f) return res.status(404).json({ error: 'הטופס לא נמצא' });
+  if (f.status === 'approved') return res.status(400).json({ error: 'הטופס כבר אושר ואינו ניתן לעריכה' });
+  const now = new Date().toISOString().slice(0, 10);
+  await q('UPDATE onboarding_forms SET data=?,status=?,submitted_at=? WHERE token=?')
+    .run(JSON.stringify(req.body.data || {}), 'submitted', now, req.params.token);
+  res.json({ ok: true });
+}));
+
+// Admin: email the form link to a client
+router.post('/onboarding/:id/send', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const RESEND_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_KEY) return res.status(503).json({ error: 'שירות המייל לא מוגדר — הוסף RESEND_API_KEY ל-Render' });
+  const f = await q('SELECT * FROM onboarding_forms WHERE id=?').get(req.params.id);
+  if (!f) return res.status(404).json({ error: 'לא נמצא' });
+  const { to_email } = req.body;
+  if (!to_email) return res.status(400).json({ error: 'חסר אימייל' });
+  const link = `${APP_URL()}/?form=${f.token}`;
+  const green = f.form_type === 'maintenance';
+  const html = `
+<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:32px">
+<div style="max-width:520px;margin:0 auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155">
+  <div style="text-align:center;margin-bottom:20px">
+    <div style="display:inline-block;background:#2D5BFF;color:#fff;font-weight:900;font-size:22px;padding:10px 20px;border-radius:12px">GS</div>
+    <h1 style="color:#fff;font-size:20px;margin:12px 0 4px">GS.pro — טופס קליטה</h1>
+  </div>
+  <div style="background:${green ? '#064e3b' : '#1e3a8a'};border-radius:10px;padding:14px;text-align:center;margin-bottom:18px">
+    <p style="color:#fff;margin:0;font-weight:bold">${green ? '🟢 טופס תחזוקה שוטפת' : '🔵 טופס פרויקט פיקוח הנדסי'}</p>
+  </div>
+  <p style="color:#cbd5e1;line-height:1.7">שלום, הוזמנת למלא טופס קליטה קצר שיאפשר לנו להקים עבורך את תיק הבניין הדיגיטלי במערכת GS.pro.</p>
+  <div style="text-align:center;margin:24px 0">
+    <a href="${link}" style="display:inline-block;background:#2D5BFF;color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:bold;font-size:16px">למילוי הטופס →</a>
+  </div>
+  <p style="color:#64748b;font-size:12px;text-align:center">גלעד שריקי פרויקטים · 050-6774798</p>
+</div></body></html>`;
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: process.env.MAIL_FROM || 'GS.pro <onboarding@resend.dev>', to: [to_email], subject: 'טופס קליטה — GS.pro', html }),
+  });
+  const data = await r.json();
+  if (!r.ok) return res.status(500).json({ error: data.message || 'שגיאה בשליחה' });
+  await q('UPDATE onboarding_forms SET sent_to=? WHERE id=?').run(to_email, req.params.id);
+  res.json({ ok: true, to: to_email });
+}));
+
+// Admin: approve a submitted form → create the building
+router.post('/onboarding/:id/approve', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const f = await q('SELECT * FROM onboarding_forms WHERE id=?').get(req.params.id);
+  if (!f) return res.status(404).json({ error: 'לא נמצא' });
+  if (f.status === 'approved') return res.status(400).json({ error: 'כבר אושר' });
+  if (!f.data) return res.status(400).json({ error: 'הטופס טרם מולא' });
+  const bid = await buildFromForm(f);
+  const now = new Date().toISOString().slice(0, 10);
+  await q('UPDATE onboarding_forms SET status=?,building_id=?,approved_at=? WHERE id=?').run('approved', bid, now, req.params.id);
+  res.json({ ok: true, building_id: bid });
+}));
+
+router.delete('/onboarding/:id', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  await q('DELETE FROM onboarding_forms WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+}));
+
 // ── Maintenance ────────────────────────────────────────────
 router.get('/maintenance', authenticate, ah(async (req, res) => {
   const bid = getBid(req);
