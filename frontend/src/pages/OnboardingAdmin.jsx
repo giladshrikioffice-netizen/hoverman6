@@ -26,11 +26,18 @@ export default function OnboardingAdmin() {
     setBusy(false);
   };
   const copy = (link) => { navigator.clipboard?.writeText(link); flash('📋 הקישור הועתק'); };
-  const send = async (id) => {
-    const to = prompt('לאיזה אימייל לשלוח את הטופס?');
-    if (!to) return;
-    try { await api.onboarding.send(id, to); flash('📧 נשלח ל-' + to); load(); }
-    catch (e) { setErr(e.message); }
+
+  // Message text shared via WhatsApp / email
+  const shareText = (r) => {
+    const kind = r.form_type === 'maintenance' ? 'טופס תחזוקה שוטפת' : 'טופס פרויקט פיקוח';
+    return `שלום, הוזמנת למלא ${kind} קצר במערכת GS.pro. למילוי הטופס:\n${r.link}\n\nגלעד שריקי פרויקטים`;
+  };
+  // Opens WhatsApp with the message ready — user just picks the contact and hits send.
+  const sendWhatsapp = (r) => window.open(`https://wa.me/?text=${encodeURIComponent(shareText(r))}`, '_blank');
+  // Opens the user's own email app with the message ready — works to any recipient, no setup.
+  const sendEmail = (r) => {
+    const subj = r.form_type === 'maintenance' ? 'טופס קליטה — תחזוקה שוטפת | GS.pro' : 'טופס קליטה — פרויקט פיקוח | GS.pro';
+    window.location.href = `mailto:?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(shareText(r))}`;
   };
   const approve = async (id) => {
     if (!confirm('לאשר ולהקים בניין חדש מנתוני הטופס?')) return;
@@ -74,8 +81,9 @@ export default function OnboardingAdmin() {
               </div>
 
               <div className="flex gap-2 flex-wrap mt-3">
+                <button onClick={() => sendWhatsapp(r)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded">📱 שלח ב-WhatsApp</button>
+                <button onClick={() => sendEmail(r)} className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1 rounded">✉️ שלח במייל</button>
                 <button onClick={() => copy(r.link)} className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1 rounded">📋 העתק קישור</button>
-                <button onClick={() => send(r.id)} className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1 rounded">📧 שלח במייל</button>
                 {r.status === 'submitted' && <>
                   <button onClick={() => setExpand(expand === r.id ? null : r.id)} className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1 rounded">👁️ {expand === r.id ? 'הסתר' : 'צפה בפרטים'}</button>
                   <button onClick={() => approve(r.id)} disabled={busy} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded disabled:opacity-50">✅ אשר והקם בניין</button>
