@@ -6,6 +6,14 @@ const { uploadDataUrl } = require('./cloud');
 
 const router = express.Router();
 
+// Translate common Resend errors to clear Hebrew.
+function mailError(msg) {
+  if (!msg) return 'שגיאה בשליחת המייל';
+  if (/testing emails|verify a domain|own email/i.test(msg))
+    return 'כדי לשלוח מייל לכתובת שאינה שלך צריך לאמת תחילה את הדומיין ב-Resend. בינתיים: שלח לכתובת שלך, או העתק את הקישור ושלח ב-WhatsApp.';
+  return msg;
+}
+
 // Wrap async handlers so rejected promises become proper 500s (Express 4).
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
   console.error('route error:', e);
@@ -194,7 +202,7 @@ router.post('/payments/:id/demand', authenticate, requireAdminOrCommittee, ah(as
     body: JSON.stringify({ from: process.env.MAIL_FROM || 'GS.pro <onboarding@resend.dev>', to: [toEmail], subject: `דרישת תשלום — דירה ${pay.unit_number} | ${building?.name || 'GS.pro'}`, html }),
   });
   const data = await r.json();
-  if (!r.ok) return res.status(500).json({ error: data.message || 'שגיאה בשליחה' });
+  if (!r.ok) return res.status(400).json({ error: mailError(data.message) });
   res.json({ ok: true, to: toEmail, balance });
 }));
 
@@ -472,7 +480,7 @@ router.post('/onboarding/:id/send', authenticate, ah(async (req, res) => {
     body: JSON.stringify({ from: process.env.MAIL_FROM || 'GS.pro <onboarding@resend.dev>', to: [to_email], subject: 'טופס קליטה — GS.pro', html }),
   });
   const data = await r.json();
-  if (!r.ok) return res.status(500).json({ error: data.message || 'שגיאה בשליחה' });
+  if (!r.ok) return res.status(400).json({ error: mailError(data.message) });
   await q('UPDATE onboarding_forms SET sent_to=? WHERE id=?').run(to_email, req.params.id);
   res.json({ ok: true, to: to_email });
 }));
@@ -703,7 +711,7 @@ router.post('/invite', authenticate, ah(async (req, res) => {
     }),
   });
   const data = await r.json();
-  if (!r.ok) return res.status(500).json({ error: data.message || 'שגיאה בשליחה' });
+  if (!r.ok) return res.status(400).json({ error: mailError(data.message) });
   res.json({ ok: true, id: data.id });
 }));
 
