@@ -295,6 +295,13 @@ async function init() {
   await addCol(`ALTER TABLE users ADD COLUMN areas TEXT DEFAULT 'both'`);
   // payments: which area a unit's payment belongs to (running maintenance vs project)
   await addCol(`ALTER TABLE payments ADD COLUMN area TEXT DEFAULT 'maintenance'`);
+  // visit-summary intake (req): structured fields + archive support on updates
+  await addCol(`ALTER TABLE updates ADD COLUMN kind TEXT DEFAULT 'new'`);
+  await addCol(`ALTER TABLE updates ADD COLUMN title TEXT`);
+  await addCol(`ALTER TABLE updates ADD COLUMN tasks TEXT`);
+  await addCol(`ALTER TABLE updates ADD COLUMN qc_notes TEXT`);
+  await addCol(`ALTER TABLE updates ADD COLUMN general_notes TEXT`);
+  await addCol(`ALTER TABLE updates ADD COLUMN raw_text TEXT`);
   // complaints approval flow (structural reorg): committee forwards to admin (מפקח)
   await addCol(`ALTER TABLE complaints ADD COLUMN forwarded INTEGER DEFAULT 0`);
   await addCol(`ALTER TABLE complaints ADD COLUMN forwarded_at TEXT`);

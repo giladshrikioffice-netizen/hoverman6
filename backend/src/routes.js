@@ -254,9 +254,25 @@ router.get('/updates', authenticate, ah(async (req, res) => {
 }));
 router.post('/updates', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const bid = getBid(req);
-  const { visit_date, summary, blockers, next_steps } = req.body;
-  const r = await q('INSERT INTO updates (building_id,visit_date,summary,blockers,next_steps,author) VALUES (?,?,?,?,?,?)').run(bid, visit_date, summary, blockers, next_steps, req.user.full_name);
+  const { visit_date, summary, blockers, next_steps, kind, title, tasks, qc_notes, general_notes, raw_text } = req.body;
+  const r = await q('INSERT INTO updates (building_id,visit_date,summary,blockers,next_steps,author,kind,title,tasks,qc_notes,general_notes,raw_text) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(bid, visit_date, summary||'', blockers||'', next_steps||'', req.user.full_name, kind||'new', title||'', tasks||'', qc_notes||'', general_notes||'', raw_text||'');
   res.json(await q('SELECT * FROM updates WHERE id=?').get(r.lastInsertRowid));
+}));
+
+// Bulk-insert archive visit summaries (read-only records split from one document)
+router.post('/updates/archive-bulk', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
+  const bid = getBid(req);
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: 'אין פריטים' });
+  let count = 0;
+  for (const it of items) {
+    if (!it || !it.raw_text) continue;
+    await q('INSERT INTO updates (building_id,visit_date,title,raw_text,author,kind) VALUES (?,?,?,?,?,?)')
+      .run(bid, it.visit_date || null, it.title || 'סיכום ביקור', it.raw_text, req.user.full_name, 'archive');
+    count++;
+  }
+  res.json({ ok: true, inserted: count });
 }));
 router.put('/updates/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const { visit_date, summary, blockers, next_steps } = req.body;

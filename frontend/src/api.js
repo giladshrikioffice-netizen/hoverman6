@@ -77,6 +77,7 @@ export const api = {
     create: d => req('POST', '/updates', { ...d, building_id: getBid() }),
     update: (id, d) => req('PUT', `/updates/${id}`, d),
     del: id => req('DELETE', `/updates/${id}`),
+    archiveBulk: items => req('POST', '/updates/archive-bulk', { items, building_id: getBid() }),
   },
 
   complaints: {
