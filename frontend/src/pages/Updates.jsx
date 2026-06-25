@@ -322,7 +322,12 @@ export default function Updates() {
         {canEdit && (
           <div className="flex gap-2">
             <button onClick={()=>setModal('archive')} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm">📂 ארכיון ישן</button>
-            <button onClick={()=>setModal('paste')} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">📋 + הדבק סיכום ביקור</button>
+            <button onClick={()=>{
+              const token = localStorage.getItem('token') || '';
+              const bid   = localStorage.getItem('building_id') || '';
+              const url   = `https://rococo-taiyaki-ec4fa3.netlify.app?token=${encodeURIComponent(token)}&bid=${encodeURIComponent(bid)}&api=https://hoverman6.onrender.com`;
+              window.open(url, '_blank');
+            }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">📋 + סיכום ביקור חדש</button>
           </div>
         )}
       </div>
