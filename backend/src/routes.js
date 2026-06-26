@@ -284,6 +284,27 @@ router.delete('/updates/:id', authenticate, requireAdmin, ah(async (req, res) =>
   res.json({ ok: true });
 }));
 
+// ── Search (full-text across all update fields) ────────────
+router.get('/search', authenticate, ah(async (req, res) => {
+  if (req.user.role === 'resident') return res.status(403).json({ error: 'גישה מוגבלת' });
+  const bid = getBid(req);
+  if (!bid) return res.status(400).json({ error: 'חסר building_id' });
+  const raw = (req.query.q || '').trim();
+  if (!raw) return res.json([]);
+  const terms = raw.split(/\s+/).filter(Boolean);
+  // All terms must appear somewhere in the record (AND logic across terms, OR across fields)
+  const conditions = terms.map(() =>
+    `(title LIKE ? OR summary LIKE ? OR blockers LIKE ? OR next_steps LIKE ? OR qc_notes LIKE ? OR general_notes LIKE ? OR tasks LIKE ? OR raw_text LIKE ?)`
+  ).join(' AND ');
+  const params = [bid, ...terms.flatMap(t => Array(8).fill(`%${t}%`))];
+  const rows = await q(
+    `SELECT id,building_id,visit_date,title,kind,summary,blockers,next_steps,qc_notes,general_notes
+     FROM updates WHERE building_id=? AND (${conditions})
+     ORDER BY visit_date DESC LIMIT 100`
+  ).all(...params);
+  res.json(rows);
+}));
+
 // ── Complaints ─────────────────────────────────────────────
 const cSelect = 'SELECT c.*, u.unit_number FROM complaints c JOIN units u ON c.unit_id=u.id';
 router.get('/complaints', authenticate, ah(async (req, res) => {

@@ -78,6 +78,7 @@ export default function Layout({ page, setPage, children }) {
           <ul className="py-3 space-y-0.5">
             {/* Always: dashboard */}
             <li><button onClick={() => go('dashboard')} className={linkCls('dashboard')}><span>סקירת הבניין</span><span className="text-base">🏗️</span></button></li>
+            <li><button onClick={() => go('search')} className={linkCls('search')}><span>חיפוש בפרויקט</span><span className="text-base">🔍</span></button></li>
 
             {/* Superadmin: system management */}
             {user?.role === 'superadmin' && (

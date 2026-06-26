@@ -134,6 +134,11 @@ export const api = {
     del: id => req('DELETE', `/monthly-reports/${id}`),
   },
 
+  search: (q, building_id) => {
+    const bid = building_id || getBid();
+    return req('GET', `/search?q=${encodeURIComponent(q)}&building_id=${bid}`);
+  },
+
   alerts: {
     send: () => req('POST', '/alerts/send', {}),
   },

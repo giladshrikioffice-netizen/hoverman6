@@ -25,6 +25,7 @@ import BackgroundChecks from './pages/BackgroundChecks';
 import ReportsModule from './pages/ReportsModule';
 import OnboardingPublic from './pages/OnboardingPublic';
 import OnboardingAdmin from './pages/OnboardingAdmin';
+import Search from './pages/Search';
 import { api } from './api';
 import './index.css';
 
@@ -42,6 +43,7 @@ const PAGES = {
   bgchecks: BackgroundChecks,
   reports: ReportsModule,
   onboarding: OnboardingAdmin,
+  search: Search,
 };
 
 function AppInner() {
