@@ -7,25 +7,46 @@ const Ctx = createContext(null);
 const ALL_MODULES = ['payments','complaints','updates','decisions','maintenance','professionals','tutorials'];
 const DEFAULT_PERMS = Object.fromEntries(ALL_MODULES.map(m => [m, 1]));
 
+function getCachedUser() {
+  try { return JSON.parse(localStorage.getItem('cached_user') || 'null'); } catch { return null; }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const cachedUser = getCachedUser();
+  const [user, setUser] = useState(cachedUser);       // instant render from cache
   const [building, setBuilding] = useState(null);
   const [permissions, setPermissions] = useState(DEFAULT_PERMS);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedUser); // no spinner if cached
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      api.me().then(u => {
-        setUser(u);
-        if (u.building_id) localStorage.setItem('building_id', u.building_id);
-        // Load permissions for residents
-        if (u.role === 'resident' && u.unit_id) {
-          api.permissions.get(u.unit_id).then(setPermissions).catch(() => {});
-        }
-        setLoading(false);
-      }).catch(() => { localStorage.removeItem('token'); setLoading(false); });
-    } else setLoading(false);
+    if (!token) { setLoading(false); return; }
+
+    // Verify token in background — update silently if still valid
+    api.me().then(u => {
+      setUser(u);
+      localStorage.setItem('cached_user', JSON.stringify(u));
+      if (u.building_id) localStorage.setItem('building_id', u.building_id);
+      if (u.role === 'resident' && u.unit_id) {
+        api.permissions.get(u.unit_id).then(setPermissions).catch(() => {});
+      }
+      setLoading(false);
+    }).catch(() => {
+      // Token expired — only log out if there was no cached session
+      if (!cachedUser) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    // Keep-alive: ping backend every 9 minutes to prevent cold starts
+    const keepAlive = setInterval(() => {
+      fetch((import.meta.env.VITE_API_URL || '') + '/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + token },
+      }).catch(() => {});
+    }, 9 * 60 * 1000);
+    return () => clearInterval(keepAlive);
   }, []);
 
   const login = async (email, password) => {
@@ -47,6 +68,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token');
     localStorage.removeItem('building_id');
     localStorage.removeItem('onboarding_done');
+    localStorage.removeItem('cached_user');
     setUser(null);
     setBuilding(null);
     setPermissions(DEFAULT_PERMS);

@@ -84,7 +84,10 @@ function AppInner() {
 
   if (loading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-      <div className="text-slate-400 text-sm">טוען...</div>
+      <div className="flex flex-col items-center gap-3">
+        <div className="bg-blue-600 text-white font-black text-xl px-3 py-2 rounded-xl">GS</div>
+        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     </div>
   );
 

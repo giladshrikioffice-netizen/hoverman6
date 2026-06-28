@@ -45,49 +45,40 @@ export default function Login() {
           <p className="text-slate-400 text-sm mt-1">גלעד שריקי — ניהול פרויקטים</p>
         </div>
 
-        {/* Waking up banner */}
-        {waking && (
-          <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl px-4 py-3 mb-4 flex items-center gap-3">
-            <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <div>
-              <p className="text-amber-400 text-sm font-medium">מעיר את השרת...</p>
-              <p className="text-amber-600 text-xs mt-0.5">הכניסה הראשונה לוקחת עד 30 שניות</p>
+        {/* Status bar — compact, non-blocking */}
+        <div className="mb-4 h-8 flex items-center justify-center">
+          {waking && (
+            <div className="flex items-center gap-2 text-amber-500 text-xs">
+              <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <span>מעיר שרת... עד 30 שניות בכניסה ראשונה</span>
             </div>
-          </div>
-        )}
-
-        {wakeFailed && (
-          <div className="bg-red-900/30 border border-red-700/50 rounded-xl px-4 py-3 mb-4">
-            <p className="text-red-400 text-sm">⚠️ השרת לא מגיב — נסה לרענן את הדף</p>
-          </div>
-        )}
-
-        {!waking && !wakeFailed && (
-          <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl px-4 py-3 mb-4 flex items-center gap-2">
-            <span className="text-emerald-400 text-sm">✅ השרת מוכן</span>
-          </div>
-        )}
+          )}
+          {!waking && !wakeFailed && (
+            <span className="text-emerald-500 text-xs">✓ מוכן</span>
+          )}
+          {wakeFailed && (
+            <span className="text-red-400 text-xs">⚠️ שגיאת חיבור — רענן את הדף</span>
+          )}
+        </div>
 
         <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl">
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">אימייל</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                disabled={waking}
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-right placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-right placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="your@email.com" required />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">סיסמה</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                disabled={waking}
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-right placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-right placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="••••••" required />
             </div>
             {error && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded-lg text-sm">{error}</div>}
-            <button type="submit" disabled={loading || waking}
+            <button type="submit" disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50 shadow-lg shadow-blue-600/20">
-              {waking ? 'ממתין לשרת...' : loading ? 'מתחבר...' : 'כניסה למערכת'}
+              {loading ? 'מתחבר...' : 'כניסה למערכת'}
             </button>
           </form>
 
