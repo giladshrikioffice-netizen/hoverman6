@@ -24,6 +24,7 @@ function bq(path) {
 }
 
 export const api = {
+  req,
   login: (email, password) => req('POST', '/auth/login', { email, password }),
   me: () => req('GET', '/auth/me'),
   auth: {

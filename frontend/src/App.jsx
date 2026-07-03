@@ -26,6 +26,7 @@ import ReportsModule from './pages/ReportsModule';
 import OnboardingPublic from './pages/OnboardingPublic';
 import OnboardingAdmin from './pages/OnboardingAdmin';
 import Search from './pages/Search';
+import StandardsAdvisor from './pages/StandardsAdvisor';
 import { api } from './api';
 import './index.css';
 
@@ -44,6 +45,7 @@ const PAGES = {
   reports: ReportsModule,
   onboarding: OnboardingAdmin,
   search: Search,
+  standards: StandardsAdvisor,
 };
 
 function AppInner() {
