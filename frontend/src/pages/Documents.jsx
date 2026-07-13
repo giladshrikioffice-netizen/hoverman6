@@ -9,6 +9,7 @@ const CATEGORIES = [
   { value: 'plans',      label: '📐 תוכניות' },
   { value: 'financial',  label: '💰 כספי' },
   { value: 'protocol',   label: '🏛️ פרוטוקולים' },
+  { value: 'handover',   label: '🏠 פרוטוקולי מסירה' },
   { value: 'report',     label: '📊 דוחות פיקוח' },
   { value: 'general',    label: '📁 כללי' },
 ];
@@ -34,9 +35,10 @@ export default function Documents() {
   const [showAdd, setShowAdd] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [units, setUnits] = useState([]);
   const fileRef = useRef();
 
-  const [form, setForm] = useState({ name: '', description: '', category: 'general', visibility: 'committee', file: null });
+  const [form, setForm] = useState({ name: '', description: '', category: 'general', visibility: 'committee', unit_id: '', file: null });
 
   const flash = m => { setSuccessMsg(m); setTimeout(() => setSuccessMsg(''), 3000); };
 
@@ -44,7 +46,8 @@ export default function Documents() {
     Promise.all([
       api.documents.list(),
       isPrivileged ? api.documents.checklist() : Promise.resolve([]),
-    ]).then(([d, c]) => { setDocs(d); setChecklist(c); setLoading(false); })
+      isPrivileged ? api.units.list() : Promise.resolve([]),
+    ]).then(([d, c, u]) => { setDocs(d); setChecklist(c); setUnits(u); setLoading(false); })
       .catch(e => { setErr(e.message); setLoading(false); });
   }, []);
 
@@ -59,18 +62,20 @@ export default function Documents() {
 
   const upload = async () => {
     if (!form.name) { setErr('שם המסמך חובה'); return; }
+    if (form.visibility === 'unit' && !form.unit_id) { setErr('יש לבחור דירה עבור מסמך המיועד לדירה ספציפית'); return; }
     setUploading(true); setErr('');
     try {
       const d = await api.documents.create({
         name: form.name, description: form.description,
         category: form.category, visibility: form.visibility,
+        unit_id: form.visibility === 'unit' ? Number(form.unit_id) : null,
         file_data: form.file?.data || null,
         file_type: form.file?.type || '',
         file_name: form.file?.name || '',
         file_size: form.file?.size || 0,
       });
       setDocs(p => [d, ...p]);
-      setShowAdd(false); setForm({ name: '', description: '', category: 'general', visibility: 'committee', file: null });
+      setShowAdd(false); setForm({ name: '', description: '', category: 'general', visibility: 'committee', unit_id: '', file: null });
       flash('✅ מסמך הועלה בהצלחה');
     } catch(e) { setErr(e.message); }
     setUploading(false);
@@ -155,8 +160,8 @@ export default function Documents() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-white font-medium text-sm">{doc.name}</span>
                     <span className="text-slate-500 text-xs">{CAT_LABEL[doc.category] || doc.category}</span>
-                    <span className={`border text-xs px-1.5 py-0.5 rounded ${doc.visibility==='all' ? 'border-emerald-700 text-emerald-400 bg-emerald-900/20' : 'border-slate-700 text-slate-500'}`}>
-                      {doc.visibility === 'all' ? '🌐 גלוי לדיירים' : '🔒 ועד בלבד'}
+                    <span className={`border text-xs px-1.5 py-0.5 rounded ${doc.visibility==='all' ? 'border-emerald-700 text-emerald-400 bg-emerald-900/20' : doc.visibility==='unit' ? 'border-purple-700 text-purple-400 bg-purple-900/20' : 'border-slate-700 text-slate-500'}`}>
+                      {doc.visibility === 'all' ? '🌐 גלוי לדיירים' : doc.visibility === 'unit' ? `🏠 דירה ${units.find(u=>u.id===doc.unit_id)?.unit_number ?? doc.unit_id}` : '🔒 ועד בלבד'}
                     </span>
                   </div>
                   {doc.description && <p className="text-slate-400 text-xs mt-1">{doc.description}</p>}
@@ -175,10 +180,12 @@ export default function Documents() {
                   )}
                   {isPrivileged && (
                     <>
-                      <button onClick={() => toggleVisibility(doc)}
-                        className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded text-xs transition-colors">
-                        {doc.visibility === 'all' ? '🔒 הגבל' : '🌐 שתף'}
-                      </button>
+                      {doc.visibility !== 'unit' && (
+                        <button onClick={() => toggleVisibility(doc)}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded text-xs transition-colors">
+                          {doc.visibility === 'all' ? '🔒 הגבל' : '🌐 שתף'}
+                        </button>
+                      )}
                       <button onClick={() => deleteDoc(doc.id)}
                         className="bg-red-900/20 hover:bg-red-900/40 text-red-400 px-2 py-1 rounded text-xs transition-colors">🗑️</button>
                     </>
@@ -254,8 +261,19 @@ export default function Documents() {
                 className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="committee">🔒 ועד ומנהל בלבד</option>
                 <option value="all">🌐 גלוי לכל הדיירים</option>
+                <option value="unit">🏠 גלוי לדירה ספציפית</option>
               </select>
             </div>
+            {form.visibility === 'unit' && (
+              <div className="mb-3">
+                <label className="block text-xs text-slate-400 mb-1">דירה *</label>
+                <select value={form.unit_id} onChange={e => setForm(p=>({...p,unit_id:e.target.value}))}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">בחר דירה...</option>
+                  {units.map(u => <option key={u.id} value={u.id}>דירה {u.unit_number}{u.owner_name ? ` — ${u.owner_name}` : ''}</option>)}
+                </select>
+              </div>
+            )}
 
             {/* File picker */}
             <div className="mb-4">

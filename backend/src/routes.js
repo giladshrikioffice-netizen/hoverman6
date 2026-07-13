@@ -841,9 +841,10 @@ router.get('/documents', authenticate, ah(async (req, res) => {
   const bid = getBid(req);
   if (!bid) return res.status(400).json({ error: 'חסר building_id' });
   const isPrivileged = ['superadmin','committee'].includes(req.user.role);
+  const cols = 'id,name,description,category,file_type,file_name,file_size,visibility,unit_id,uploaded_by,created_at';
   const docs = isPrivileged
-    ? await q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE building_id=? ORDER BY created_at DESC').all(bid)
-    : await q("SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE building_id=? AND visibility='all' ORDER BY created_at DESC").all(bid);
+    ? await q(`SELECT ${cols} FROM documents WHERE building_id=? ORDER BY created_at DESC`).all(bid)
+    : await q(`SELECT ${cols} FROM documents WHERE building_id=? AND (visibility='all' OR (visibility='unit' AND unit_id=?)) ORDER BY created_at DESC`).all(bid, req.user.unit_id || 0);
   res.json(docs);
 }));
 
@@ -851,24 +852,25 @@ router.get('/documents/:id/download', authenticate, ah(async (req, res) => {
   const doc = await q('SELECT * FROM documents WHERE id=?').get(req.params.id);
   if (!doc) return res.status(404).json({ error: 'לא נמצא' });
   const isPrivileged = ['superadmin','committee'].includes(req.user.role);
-  if (doc.visibility !== 'all' && !isPrivileged) return res.status(403).json({ error: 'אין גישה' });
+  const unitMatch = doc.visibility === 'unit' && doc.unit_id === req.user.unit_id;
+  if (doc.visibility !== 'all' && !unitMatch && !isPrivileged) return res.status(403).json({ error: 'אין גישה' });
   if (!doc.file_data) return res.status(404).json({ error: 'אין קובץ' });
   res.json({ file_data: doc.file_data, file_type: doc.file_type, file_name: doc.file_name });
 }));
 
 router.post('/documents', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
   const bid = getBid(req);
-  const { name, description, category, file_data, file_type, file_name, file_size, visibility } = req.body;
+  const { name, description, category, file_data, file_type, file_name, file_size, visibility, unit_id } = req.body;
   if (!name) return res.status(400).json({ error: 'שם חובה' });
-  const r = await q('INSERT INTO documents (building_id,name,description,category,file_data,file_type,file_name,file_size,visibility,uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(bid, name, description||'', category||'general', file_data||null, file_type||'', file_name||'', file_size||0, visibility||'committee', req.user.full_name);
-  res.json(await q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE id=?').get(r.lastInsertRowid));
+  const r = await q('INSERT INTO documents (building_id,name,description,category,file_data,file_type,file_name,file_size,visibility,unit_id,uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+    .run(bid, name, description||'', category||'general', file_data||null, file_type||'', file_name||'', file_size||0, visibility||'committee', unit_id||null, req.user.full_name);
+  res.json(await q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,unit_id,uploaded_by,created_at FROM documents WHERE id=?').get(r.lastInsertRowid));
 }));
 
 router.put('/documents/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
-  const { name, description, category, visibility } = req.body;
-  await q('UPDATE documents SET name=?,description=?,category=?,visibility=? WHERE id=?').run(name, description, category, visibility, req.params.id);
-  res.json(await q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,uploaded_by,created_at FROM documents WHERE id=?').get(req.params.id));
+  const { name, description, category, visibility, unit_id } = req.body;
+  await q('UPDATE documents SET name=?,description=?,category=?,visibility=?,unit_id=? WHERE id=?').run(name, description, category, visibility, unit_id||null, req.params.id);
+  res.json(await q('SELECT id,name,description,category,file_type,file_name,file_size,visibility,unit_id,uploaded_by,created_at FROM documents WHERE id=?').get(req.params.id));
 }));
 
 router.delete('/documents/:id', authenticate, requireAdminOrCommittee, ah(async (req, res) => {
