@@ -76,7 +76,25 @@ router.post('/buildings/:id/generate-units', authenticate, ah(async (req, res) =
 
 router.delete('/buildings/:id', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  await q('DELETE FROM buildings WHERE id=?').run(req.params.id);
+  const bid = req.params.id;
+  const del = async sql => { try { await q(sql).run(bid); } catch { /* table may not exist */ } };
+  // FK-safe order: rows referencing units first, then units, then the building.
+  await del('DELETE FROM payments WHERE building_id=?');
+  await del('DELETE FROM complaints WHERE building_id=?');
+  await del('DELETE FROM unit_permissions WHERE building_id=?');
+  await del('DELETE FROM contractors WHERE building_id=?');
+  await del('DELETE FROM budget_items WHERE building_id=?');
+  await del('DELETE FROM decisions WHERE building_id=?');
+  await del('DELETE FROM updates WHERE building_id=?');
+  await del('DELETE FROM professionals WHERE building_id=?');
+  await del('DELETE FROM maintenance_items WHERE building_id=?');
+  await del('DELETE FROM documents WHERE building_id=?');
+  await del('DELETE FROM doc_checklist WHERE building_id=?');
+  await del('DELETE FROM monthly_reports WHERE building_id=?');
+  await del('UPDATE onboarding_forms SET building_id=NULL WHERE building_id=?');
+  await del('UPDATE users SET building_id=NULL WHERE building_id=?');
+  await del('DELETE FROM units WHERE building_id=?');
+  await q('DELETE FROM buildings WHERE id=?').run(bid);
   res.json({ ok: true });
 }));
 
