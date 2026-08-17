@@ -309,6 +309,8 @@ async function init() {
   await addCol(`ALTER TABLE complaints ADD COLUMN admin_response TEXT`);
   // per-unit document visibility (handover protocols etc.) — committee assigns a doc to one unit
   await addCol(`ALTER TABLE documents ADD COLUMN unit_id INTEGER`);
+  // archive finished projects (hidden from active project list)
+  await addCol(`ALTER TABLE buildings ADD COLUMN archived INTEGER DEFAULT 0`);
 
   await seed();
   console.log(`✅ DB ready (${USE_PG ? 'PostgreSQL' : 'SQLite'})`);

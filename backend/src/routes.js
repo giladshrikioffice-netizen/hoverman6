@@ -46,9 +46,32 @@ router.post('/buildings', authenticate, ah(async (req, res) => {
 
 router.put('/buildings/:id', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
-  const { name, address, num_units, num_floors, budget, target_date, type } = req.body;
-  await q('UPDATE buildings SET name=?,address=?,num_units=?,num_floors=?,budget=?,target_date=?,type=? WHERE id=?').run(name, address, num_units, num_floors, budget, target_date, type||'supervision', req.params.id);
+  const { name, address, num_units, num_floors, budget, target_date, type, archived } = req.body;
+  const cur = await q('SELECT * FROM buildings WHERE id=?').get(req.params.id);
+  if (!cur) return res.status(404).json({ error: 'לא נמצא' });
+  await q('UPDATE buildings SET name=?,address=?,num_units=?,num_floors=?,budget=?,target_date=?,type=?,archived=? WHERE id=?')
+    .run(name ?? cur.name, address ?? cur.address, num_units ?? cur.num_units, num_floors ?? cur.num_floors,
+         budget ?? cur.budget, target_date ?? cur.target_date, type || cur.type || 'supervision',
+         archived != null ? (archived ? 1 : 0) : (cur.archived || 0), req.params.id);
   res.json(await q('SELECT * FROM buildings WHERE id=?').get(req.params.id));
+}));
+
+// Generate unit rows for an existing building (does not touch existing units).
+router.post('/buildings/:id/generate-units', authenticate, ah(async (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
+  const bid = parseInt(req.params.id);
+  const count = parseInt(req.body.count) || 0;
+  if (count < 1) return res.status(400).json({ error: 'מספר יחידות לא תקין' });
+  const existing = await q('SELECT unit_number FROM units WHERE building_id=?').all(bid);
+  const have = new Set(existing.map(u => u.unit_number));
+  let created = 0;
+  for (let i = 1; i <= count; i++) {
+    if (have.has(i)) continue;
+    await q('INSERT INTO units (building_id,unit_number,floor) VALUES (?,?,?)').run(bid, i, Math.ceil(i / 4));
+    created++;
+  }
+  await q('UPDATE buildings SET num_units=? WHERE id=?').run(count, bid);
+  res.json({ ok: true, created, total: count });
 }));
 
 router.delete('/buildings/:id', authenticate, ah(async (req, res) => {
