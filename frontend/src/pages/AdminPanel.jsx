@@ -36,6 +36,14 @@ export default function AdminPanel({ onSelectBuilding }) {
 
   const enter = b => { selectBuilding(b); onSelectBuilding(b); };
 
+  const toggleArchive = async b => {
+    const updated = await api.buildings.update(b.id, { ...b, archived: b.archived ? 0 : 1 }).catch(e => setErr(e.message));
+    if (updated) setBuildings(p => p.map(x => x.id === b.id ? updated : x));
+  };
+
+  const active = buildings.filter(b => !b.archived);
+  const archived = buildings.filter(b => b.archived);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -49,7 +57,7 @@ export default function AdminPanel({ onSelectBuilding }) {
       {err && <div className="bg-red-900/30 border border-red-700 text-red-400 px-3 py-2 rounded mb-4 text-sm">{err}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {buildings.map(b => (
+        {active.map(b => (
           <div key={b.id} className={`bg-slate-900 border border-slate-700 rounded-xl p-4 hover:border-blue-500/50 transition-colors ${demoTint(b.is_demo)}`}>
             <div className="flex justify-between items-start mb-3">
               <div>
@@ -60,8 +68,9 @@ export default function AdminPanel({ onSelectBuilding }) {
                 </span>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setForm(b); setEditing(b.id); }} className="text-blue-400 hover:text-blue-300 text-xs">✏️</button>
-                <button onClick={() => del(b.id)} className="text-red-400 hover:text-red-300 text-xs">🗑️</button>
+                <button onClick={() => { setForm(b); setEditing(b.id); }} className="text-blue-400 hover:text-blue-300 text-xs" title="עריכה">✏️</button>
+                <button onClick={() => toggleArchive(b)} className="text-slate-400 hover:text-amber-400 text-xs" title="העבר לארכיון">📦</button>
+                <button onClick={() => del(b.id)} className="text-red-400 hover:text-red-300 text-xs" title="מחיקה">🗑️</button>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 mb-4">
@@ -77,6 +86,36 @@ export default function AdminPanel({ onSelectBuilding }) {
           </div>
         ))}
       </div>
+
+      {archived.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">📦 ארכיון · פרויקטים שהסתיימו ({archived.length})</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {archived.map(b => (
+              <div key={b.id} className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 opacity-70 hover:opacity-100 transition-opacity">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-300">{b.name}</h3>
+                    <p className="text-slate-500 text-xs mt-0.5">{b.address}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => toggleArchive(b)} className="text-emerald-400 hover:text-emerald-300 text-xs" title="החזר מארכיון">↩️</button>
+                    <button onClick={() => del(b.id)} className="text-red-400 hover:text-red-300 text-xs" title="מחיקה">🗑️</button>
+                  </div>
+                </div>
+                <div className="flex gap-3 text-xs text-slate-500 mb-3">
+                  <span>🏠 {b.num_units} דירות</span>
+                  <span>🎯 {b.target_date || '—'}</span>
+                </div>
+                <button onClick={() => enter(b)}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 rounded-lg py-1.5 text-sm transition-colors">
+                  צפייה בפרויקט →
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {editing !== null && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
