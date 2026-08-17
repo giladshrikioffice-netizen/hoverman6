@@ -8,7 +8,9 @@ async function login(req, res) {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'נדרש אימייל וסיסמה' });
-    const user = await q('SELECT * FROM users WHERE email=?').get(email.toLowerCase().trim());
+    // Normalize: strip angle brackets/whitespace (pasted "<a@b.com>") + lowercase.
+    const cleanEmail = e => (e || '').replace(/[<>]/g, '').replace(/\s/g, '').toLowerCase();
+    const user = await q('SELECT * FROM users WHERE email=?').get(cleanEmail(email));
     if (!user || !bcrypt.compareSync(password, user.password))
       return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
     const areas = user.areas || 'both';

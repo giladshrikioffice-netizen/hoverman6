@@ -21,6 +21,10 @@ const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e
   if (!res.headersSent) res.status(500).json({ error: 'שגיאת שרת' });
 });
 
+// Normalize an email: strip angle brackets/whitespace (e.g. pasted "<a@b.com>"), lowercase.
+// Prevents login-blocking junk chars from ever reaching the DB.
+const cleanEmail = e => (e || '').replace(/[<>]/g, '').replace(/\s/g, '').toLowerCase();
+
 // ── Buildings (superadmin) ─────────────────────────────────
 router.get('/buildings', authenticate, ah(async (req, res) => {
   if (req.user.role === 'superadmin') return res.json(await q('SELECT * FROM buildings ORDER BY id').all());
@@ -485,10 +489,10 @@ async function buildFromForm(form) {
   const contact = type === 'maintenance' ? d.contact : (d.reps && d.reps[0]);
   if (contact && contact.email) {
     try {
-      const exists = await q('SELECT id FROM users WHERE email=?').get(contact.email.toLowerCase().trim());
+      const exists = await q('SELECT id FROM users WHERE email=?').get(cleanEmail(contact.email));
       if (!exists) {
         await q('INSERT INTO users (full_name,email,password,role,building_id,areas) VALUES (?,?,?,?,?,?)')
-          .run(contact.name || 'נציג ועד', contact.email.toLowerCase().trim(), bcrypt.hashSync('123456', 10), 'committee', bid, type === 'maintenance' ? 'maintenance' : 'supervision');
+          .run(contact.name || 'נציג ועד', cleanEmail(contact.email), bcrypt.hashSync('123456', 10), 'committee', bid, type === 'maintenance' ? 'maintenance' : 'supervision');
       }
     } catch { /* ignore */ }
   }
@@ -695,11 +699,11 @@ router.post('/users', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
   const { full_name, email, password, role, building_id, unit_id, areas } = req.body;
   if (!full_name || !email || !password || !role) return res.status(400).json({ error: 'חסרים שדות חובה' });
-  const existing = await q('SELECT id FROM users WHERE email=?').get(email.toLowerCase().trim());
+  const existing = await q('SELECT id FROM users WHERE email=?').get(cleanEmail(email));
   if (existing) return res.status(400).json({ error: 'אימייל כבר קיים' });
   const hashed = bcrypt.hashSync(password, 10);
   const r = await q('INSERT INTO users (full_name,email,password,role,building_id,unit_id,areas) VALUES (?,?,?,?,?,?,?)')
-    .run(full_name, email.toLowerCase().trim(), hashed, role, building_id || null, unit_id || null, areas || 'both');
+    .run(full_name, cleanEmail(email), hashed, role, building_id || null, unit_id || null, areas || 'both');
   res.json(await q('SELECT id,full_name,email,role,building_id,unit_id,areas FROM users WHERE id=?').get(r.lastInsertRowid));
 }));
 
@@ -716,10 +720,10 @@ router.put('/users/:id', authenticate, ah(async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'אדמין בלבד' });
   const { full_name, email, building_id, unit_id, role, areas } = req.body;
   if (!full_name || !email) return res.status(400).json({ error: 'שם ואימייל הם חובה' });
-  const existing = await q('SELECT id FROM users WHERE email=? AND id!=?').get(email.toLowerCase().trim(), req.params.id);
+  const existing = await q('SELECT id FROM users WHERE email=? AND id!=?').get(cleanEmail(email), req.params.id);
   if (existing) return res.status(400).json({ error: 'אימייל כבר קיים אצל משתמש אחר' });
   await q('UPDATE users SET full_name=?,email=?,building_id=?,unit_id=?,role=?,areas=? WHERE id=?')
-    .run(full_name, email.toLowerCase().trim(), building_id || null, unit_id || null, role, areas || 'both', req.params.id);
+    .run(full_name, cleanEmail(email), building_id || null, unit_id || null, role, areas || 'both', req.params.id);
   res.json(await q('SELECT id,full_name,email,role,building_id,unit_id,areas FROM users WHERE id=?').get(req.params.id));
 }));
 
